@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0a192f" />
+<meta name="robots" content="noindex,nofollow" />
+<title>GPN Automation Console — Sign In</title>
+<link rel="stylesheet" href="gpnstyle.css" />
+</head>
+<body class="gpn-console-login-body">
+
+<main class="gpn-console-login-wrap">
+  <div class="gpn-console-login-card">
+
+    <div class="gpn-console-login-brand">
+      <div class="gpn-console-login-logo">GPN</div>
+      <h1 class="gpn-console-login-title">GPN Automation Console</h1>
+      <p class="gpn-console-login-sub">SuperAdmin access only</p>
+    </div>
+
+    <div class="gpn-console-login-divider"></div>
+
+    <form id="loginForm" novalidate autocomplete="on">
+      <label class="gpn-console-label" for="username">Username or Email</label>
+      <input id="username" name="username" type="text"
+             class="gpn-console-input"
+             autocomplete="username" autocapitalize="off"
+             spellcheck="false" required />
+
+      <label class="gpn-console-label" for="password">Password</label>
+      <div class="gpn-console-pw-wrap">
+        <input id="password" name="password" type="password"
+               class="gpn-console-input"
+               autocomplete="current-password" required />
+        <button type="button" id="togglePw" class="gpn-console-toggle"
+                aria-label="Show password">Show</button>
+      </div>
+
+      <div id="error" class="gpn-console-alert gpn-console-alert-err" role="alert" hidden></div>
+
+      <button type="submit" id="submitBtn" class="gpn-console-btn gpn-console-btn-primary" style="margin-top:20px;">
+        <span class="gpn-console-spinner" id="spinner" hidden></span>
+        <span id="btnLabel">Sign In</span>
+      </button>
+    </form>
+
+    <p class="gpn-console-login-foot">Private internal tool · GPN</p>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  const API_URL = 'https://script.google.com/macros/s/AKfycbw0yce4NoUdqzHrZLm7ZAGuW8c8MRUFdzSfKRe8YO6Xb4EcgiJ12JuyubL7EjXmrZFZww/exec';
+
+  const TOKEN_KEY  = 'gpn_token';
+  const USER_KEY   = 'gpn_user';
+  const FLASH_KEY  = 'gpn_flash';
+  const DASHBOARD  = 'dashboard.html';
+
+  const form     = document.getElementById('loginForm');
+  const uInput   = document.getElementById('username');
+  const pInput   = document.getElementById('password');
+  const toggle   = document.getElementById('togglePw');
+  const errBox   = document.getElementById('error');
+  const submit   = document.getElementById('submitBtn');
+  const spinner  = document.getElementById('spinner');
+  const btnLabel = document.getElementById('btnLabel');
+
+  function showError(msg) { errBox.textContent = msg; errBox.hidden = false; }
+  function clearError()   { errBox.hidden = true; errBox.textContent = ''; }
+  function setLoading(on) {
+    submit.disabled = on;
+    spinner.hidden = !on;
+    btnLabel.textContent = on ? 'Signing in…' : 'Sign In';
+  }
+
+  function deviceLabel() {
+    const ua = navigator.userAgent || '';
+    if (/Android/i.test(ua)) return 'Android';
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS';
+    if (/Windows/i.test(ua)) return 'Windows';
+    if (/Mac/i.test(ua)) return 'macOS';
+    if (/Linux/i.test(ua)) return 'Linux';
+    return 'web';
+  }
+
+  async function apiLogin(username, password) {
+    let res;
+    try {
+      res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'auth.login',
+          username: username,
+          password: password,
+          device: deviceLabel()
+        }),
+        redirect: 'follow'
+      });
+    } catch (e) { return { ok: false, error: 'NETWORK' }; }
+    try { return await res.json(); }
+    catch (e) { return { ok: false, error: 'BAD_RESPONSE' }; }
+  }
+
+  async function apiMe(token) {
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'auth.me', token: token }),
+        redirect: 'follow'
+      });
+      return await res.json();
+    } catch (e) { return { ok: false }; }
+  }
+
+  function friendlyError(code) {
+    switch (code) {
+      case 'INVALID_CREDENTIALS':
+      case 'MISSING_CREDENTIALS': return 'Invalid username or password.';
+      case 'ACCOUNT_DISABLED':    return 'This account is not active.';
+      case 'NETWORK':             return 'Cannot reach server. Check your connection.';
+      case 'BAD_RESPONSE':
+      case 'BAD_JSON':            return 'The server is not responding correctly. Please try again.';
+      default:                    return 'Sign in failed. Please try again.';
+    }
+  }
+
+  toggle.addEventListener('click', function () {
+    const isPw = pInput.type === 'password';
+    pInput.type = isPw ? 'text' : 'password';
+    toggle.textContent = isPw ? 'Hide' : 'Show';
+    pInput.focus();
+  });
+
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    clearError();
+
+    const username = uInput.value.trim();
+    const password = pInput.value;
+
+    if (!username || !password) {
+      showError('Please enter both username and password.');
+      (!username ? uInput : pInput).focus();
+      return;
+    }
+
+    setLoading(true);
+    const res = await apiLogin(username, password);
+    setLoading(false);
+
+    if (!res || !res.ok) {
+      showError(friendlyError((res && res.error) || 'UNKNOWN'));
+      pInput.value = '';
+      pInput.focus();
+      return;
+    }
+
+    try {
+      sessionStorage.setItem(TOKEN_KEY, res.data.token);
+      sessionStorage.setItem(USER_KEY, JSON.stringify(res.data.user || {}));
+      sessionStorage.removeItem(FLASH_KEY);
+    } catch (e) {}
+
+    window.location.href = DASHBOARD;
+  });
+
+  (async function bootstrap() {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      try {
+        const msg = sessionStorage.getItem(FLASH_KEY);
+        if (msg) { showError(msg); sessionStorage.removeItem(FLASH_KEY); }
+      } catch (e) {}
+      return;
+    }
+    const me = await apiMe(token);
+    if (me && me.ok) {
+      window.location.href = DASHBOARD;
+    } else {
+      sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(USER_KEY);
+    }
+  })();
+})();
+</script>
+</body>
+</html>

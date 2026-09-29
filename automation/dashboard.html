@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0a192f" />
+<meta name="robots" content="noindex,nofollow" />
+<title>GPN Automation Console</title>
+<link rel="stylesheet" href="gpnstyle.css" />
+</head>
+<body>
+
+<div id="pageLoading" class="gpn-console-page-loading">
+  <div class="gpn-console-spinner"></div>
+  <div>Loading Console…</div>
+</div>
+
+<header class="gpn-console-header">
+  <div class="gpn-console-brand">
+    <div class="gpn-console-brand-logo">GPN</div>
+    <div class="gpn-console-brand-title">Automation Console</div>
+  </div>
+  <div class="gpn-console-user-area">
+    <span class="gpn-console-user-badge" id="userBadge">SuperAdmin</span>
+    <button class="gpn-console-btn gpn-console-btn-sm" id="btnChangePw" type="button">Change Password</button>
+    <button class="gpn-console-btn gpn-console-btn-sm" id="btnLogout" type="button">Logout</button>
+  </div>
+</header>
+
+<main class="gpn-console-main">
+
+  <!-- ============================================================
+       STATISTICS
+       ============================================================ -->
+  <section class="gpn-console-stats-grid">
+
+    <div class="gpn-console-stats-group">
+      <h3>PDF Automation</h3>
+      <div class="gpn-console-stat-row cols-5">
+        <div class="gpn-console-stat">
+          <div class="gpn-console-stat-label">Total</div>
+          <div class="gpn-console-stat-value" id="statPdfTotal">—</div>
+        </div>
+        <div class="gpn-console-stat gpn-console-stat-info">
+          <div class="gpn-console-stat-label">Ready</div>
+          <div class="gpn-console-stat-value" id="statPdfReady">—</div>
+        </div>
+        <div class="gpn-console-stat gpn-console-stat-warn">
+          <div class="gpn-console-stat-label">Processing</div>
+          <div class="gpn-console-stat-value" id="statPdfProcessing">—</div>
+        </div>
+        <div class="gpn-console-stat gpn-console-stat-ok">
+          <div class="gpn-console-stat-label">Completed</div>
+          <div class="gpn-console-stat-value" id="statPdfCompleted">—</div>
+        </div>
+        <div class="gpn-console-stat gpn-console-stat-err">
+          <div class="gpn-console-stat-label">Errors</div>
+          <div class="gpn-console-stat-value" id="statPdfErrors">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gpn-console-stats-group">
+      <h3>Social Automation</h3>
+      <div class="gpn-console-stat-row cols-5">
+        <div class="gpn-console-stat">
+          <div class="gpn-console-stat-label">Total</div>
+          <div class="gpn-console-stat-value" id="statSocialTotal">—</div>
+        </div>
+        <div class="gpn-console-stat gpn-console-stat-info">
+          <div class="gpn-console-stat-label">Ready</div>
+          <div class="gpn-console-stat-value" id="statSocialReady">—</div>
+        </div>
+        <div class="gpn-console-stat gpn-console-stat-warn">
+          <div class="gpn-console-stat-label">Processing</div>
+          <div class="gpn-console-stat-value" id="statSocialProcessing">—</div>
+        </div>
+        <div class="gpn-console-stat gpn-console-stat-ok">
+          <div class="gpn-console-stat-label">Completed</div>
+          <div class="gpn-console-stat-value" id="statSocialCompleted">—</div>
+        </div>
+        <div class="gpn-console-stat gpn-console-stat-err">
+          <div class="gpn-console-stat-label">Errors</div>
+          <div class="gpn-console-stat-value" id="statSocialErrors">—</div>
+        </div>
+      </div>
+      <div class="gpn-console-stats-meta">
+        <span id="statsMeta">Statistics not loaded</span>
+        <button class="gpn-console-btn gpn-console-btn-sm" id="btnRefreshStats" type="button">Refresh</button>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ============================================================
+       TABS
+       ============================================================ -->
+  <nav class="gpn-console-tabs" role="tablist">
+    <button type="button" role="tab" class="gpn-console-tab active" data-tab="pdf" aria-selected="true">PDF</button>
+    <button type="button" role="tab" class="gpn-console-tab" data-tab="social" aria-selected="false">Social</button>
+  </nav>
+
+  <!-- ============================================================
+       PDF TAB
+       ============================================================ -->
+  <section class="gpn-console-panel active" id="panel-pdf" role="tabpanel">
+
+    <div class="gpn-console-card">
+      <div class="gpn-console-card-head">
+        <h2 class="gpn-console-card-title">Add PDF Job</h2>
+      </div>
+      <div class="gpn-console-card-body">
+        <form id="pdfForm" novalidate>
+          <div class="gpn-console-form-grid cols-2">
+
+            <div class="gpn-console-field gpn-console-field-full">
+              <label class="gpn-console-label" for="pdfBloggerUrl">Blogger URL</label>
+              <input id="pdfBloggerUrl" type="url" inputmode="url" class="gpn-console-input"
+                     placeholder="https://guidedpathnoida.in/2026/09/…"
+                     autocomplete="off" required />
+            </div>
+
+            <div class="gpn-console-field gpn-console-field-full">
+              <label class="gpn-console-label" for="pdfPostTitle">Post Title</label>
+              <input id="pdfPostTitle" type="text" class="gpn-console-input"
+                     placeholder="Knowing Our Numbers" autocomplete="off" required />
+            </div>
+
+            <div class="gpn-console-field">
+              <label class="gpn-console-label" for="pdfClass">Class</label>
+              <input id="pdfClass" type="text" inputmode="numeric" class="gpn-console-input"
+                     placeholder="6" autocomplete="off" required />
+            </div>
+
+            <div class="gpn-console-field">
+              <label class="gpn-console-label" for="pdfSubject">Subject</label>
+              <input id="pdfSubject" type="text" class="gpn-console-input"
+                     placeholder="Maths" autocomplete="off" required />
+            </div>
+
+            <div class="gpn-console-field">
+              <label class="gpn-console-label" for="pdfChapterNo">Chapter Number</label>
+              <input id="pdfChapterNo" type="text" inputmode="numeric" class="gpn-console-input"
+                     placeholder="01" autocomplete="off" required />
+            </div>
+
+            <div class="gpn-console-field">
+              <label class="gpn-console-label" for="pdfChapterName">Chapter Name</label>
+              <input id="pdfChapterName" type="text" class="gpn-console-input"
+                     placeholder="Knowing Our Numbers" autocomplete="off" required />
+            </div>
+
+            <div class="gpn-console-field">
+              <label class="gpn-console-label" for="pdfFilename">PDF Filename</label>
+              <input id="pdfFilename" type="text" class="gpn-console-input"
+                     placeholder="ch-01.pdf" autocomplete="off" required />
+              <div class="gpn-console-hint">Include the .pdf extension.</div>
+            </div>
+
+            <div class="gpn-console-field">
+              <label class="gpn-console-label" for="pdfR2Folder">R2 Folder</label>
+              <input id="pdfR2Folder" type="text" class="gpn-console-input"
+                     placeholder="Class-06/Maths" autocomplete="off" required />
+              <div class="gpn-console-hint">No leading or trailing slash.</div>
+            </div>
+
+            <div class="gpn-console-field">
+              <label class="gpn-console-label" for="pdfGenerate">Generate PDF</label>
+              <select id="pdfGenerate" class="gpn-console-select">
+                <option value="YES" selected>YES</option>
+                <option value="NO">NO</option>
+              </select>
+            </div>
+
+          </div>
+
+          <div class="gpn-console-form-actions">
+            <button type="submit" class="gpn-console-btn gpn-console-btn-primary" id="pdfSubmitBtn">
+              Add to Queue
+            </button>
+          </div>
+        </form>
+
+        <div id="pdfFormAlert" class="gpn-console-alert" hidden></div>
+      </div>
+    </div>
+
+    <div class="gpn-console-card">
+      <div class="gpn-console-card-head">
+        <h2 class="gpn-console-card-title">PDF Queue</h2>
+        <button type="button" class="gpn-console-btn gpn-console-btn-sm" id="btnReloadPdf">Refresh</button>
+      </div>
+      <div class="gpn-console-card-body">
+        <div class="gpn-console-table-wrap">
+          <table class="gpn-console-table" id="pdfTable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Class</th>
+                <th>Subject</th>
+                <th>Chapter</th>
+                <th>Filename</th>
+                <th>Status</th>
+                <th>R2 URL</th>
+                <th>Processed</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody id="pdfQueueRows">
+              <tr><td colspan="10" class="gpn-console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ============================================================
+       SOCIAL TAB
+       ============================================================ -->
+  <section class="gpn-console-panel" id="panel-social" role="tabpanel">
+
+    <div class="gpn-console-card">
+      <div class="gpn-console-card-head">
+        <h2 class="gpn-console-card-title">Add Social Post</h2>
+      </div>
+      <div class="gpn-console-card-body">
+        <form id="socialForm" novalidate>
+
+          <div class="gpn-console-form-grid cols-2">
+            <div class="gpn-console-field gpn-console-field-full">
+              <label class="gpn-console-label" for="socTitle">Post Title</label>
+              <input id="socTitle" type="text" class="gpn-console-input" required
+                     placeholder="CBSE Class 6 Maths — Chapter 1 live" autocomplete="off" />
+            </div>
+            <div class="gpn-console-field gpn-console-field-full">
+              <label class="gpn-console-label" for="socSummary">Post Summary</label>
+              <textarea id="socSummary" class="gpn-console-textarea" rows="2"
+                        placeholder="Short internal summary / note (optional)"></textarea>
+            </div>
+          </div>
+
+          <div class="gpn-console-platform">
+            <h4 class="gpn-console-platform-title">Facebook</h4>
+            <div class="gpn-console-form-grid cols-2">
+              <div class="gpn-console-field gpn-console-field-full">
+                <label class="gpn-console-label" for="socFbCaption">Caption</label>
+                <textarea id="socFbCaption" class="gpn-console-textarea" rows="3"
+                          placeholder="Facebook caption…"></textarea>
+              </div>
+              <div class="gpn-console-field gpn-console-field-full">
+                <label class="gpn-console-label" for="socFbImage">Image URL</label>
+                <input id="socFbImage" type="url" inputmode="url" class="gpn-console-input"
+                       placeholder="https://assets.guidedpathnoida.in/…" autocomplete="off" />
+              </div>
+            </div>
+          </div>
+
+          <div class="gpn-console-platform">
+            <h4 class="gpn-console-platform-title">Instagram</h4>
+            <div class="gpn-console-form-grid cols-2">
+              <div class="gpn-console-field gpn-console-field-full">
+                <label class="gpn-console-label" for="socIgCaption">Caption</label>
+                <textarea id="socIgCaption" class="gpn-console-textarea" rows="3"
+                          placeholder="Instagram caption…"></textarea>
+              </div>
+              <div class="gpn-console-field gpn-console-field-full">
+                <label class="gpn-console-label" for="socIgImage">Image URL</label>
+                <input id="socIgImage" type="url" inputmode="url" class="gpn-console-input"
+                       placeholder="https://assets.guidedpathnoida.in/…" autocomplete="off" />
+              </div>
+            </div>
+          </div>
+
+          <div class="gpn-console-platform">
+            <h4 class="gpn-console-platform-title">Threads</h4>
+            <div class="gpn-console-form-grid cols-2">
+              <div class="gpn-console-field gpn-console-field-full">
+                <label class="gpn-console-label" for="socThCaption">Caption</label>
+                <textarea id="socThCaption" class="gpn-console-textarea" rows="3"
+                          placeholder="Threads caption…"></textarea>
+              </div>
+              <div class="gpn-console-field gpn-console-field-full">
+                <label class="gpn-console-label" for="socThImage">Image URL</label>
+                <input id="socThImage" type="url" inputmode="url" class="gpn-console-input"
+                       placeholder="https://assets.guidedpathnoida.in/…" autocomplete="off" />
+              </div>
+            </div>
+          </div>
+
+          <div class="gpn-console-platform">
+            <h4 class="gpn-console-platform-title">Pinterest</h4>
+            <div class="gpn-console-form-grid cols-2">
+              <div class="gpn-console-field gpn-console-field-full">
+                <label class="gpn-console-label" for="socPinCaption">Caption</label>
+                <textarea id="socPinCaption" class="gpn-console-textarea" rows="3"
+                          placeholder="Pinterest caption…"></textarea>
+              </div>
+              <div class="gpn-console-field gpn-console-field-full">
+                <label class="gpn-console-label" for="socPinImage">Image URL</label>
+                <input id="socPinImage" type="url" inputmode="url" class="gpn-console-input"
+                       placeholder="https://assets.guidedpathnoida.in/…" autocomplete="off" />
+              </div>
+            </div>
+          </div>
+
+          <div class="gpn-console-platform">
+            <h4 class="gpn-console-platform-title">WhatsApp</h4>
+            <div class="gpn-console-form-grid cols-2">
+              <div class="gpn-console-field gpn-console-field-full">
+                <label class="gpn-console-label" for="socWaCaption">Caption</label>
+                <textarea id="socWaCaption" class="gpn-console-textarea" rows="3"
+                          placeholder="WhatsApp caption…"></textarea>
+              </div>
+              <div class="gpn-console-field gpn-console-field-full">
+                <label class="gpn-console-label" for="socWaImage">Image URL</label>
+                <input id="socWaImage" type="url" inputmode="url" class="gpn-console-input"
+                       placeholder="https://assets.guidedpathnoida.in/…" autocomplete="off" />
+              </div>
+            </div>
+          </div>
+
+          <div class="gpn-console-form-grid cols-2" style="margin-top:16px;">
+            <div class="gpn-console-field">
+              <label class="gpn-console-label" for="socDate">Publish Date</label>
+              <input id="socDate" type="date" class="gpn-console-input" required />
+            </div>
+            <div class="gpn-console-field">
+              <label class="gpn-console-label" for="socTime">Publish Time</label>
+              <input id="socTime" type="time" class="gpn-console-input" required />
+              <div class="gpn-console-hint">Timezone: Asia/Kolkata</div>
+            </div>
+          </div>
+
+          <div class="gpn-console-form-actions">
+            <button type="submit" class="gpn-console-btn gpn-console-btn-primary" id="socialSubmitBtn">
+              Add to Queue
+            </button>
+          </div>
+        </form>
+
+        <div id="socialFormAlert" class="gpn-console-alert" hidden></div>
+      </div>
+    </div>
+
+    <div class="gpn-console-card">
+      <div class="gpn-console-card-head">
+        <h2 class="gpn-console-card-title">Social Queue</h2>
+        <button type="button" class="gpn-console-btn gpn-console-btn-sm" id="btnReloadSocial">Refresh</button>
+      </div>
+      <div class="gpn-console-card-body">
+        <div class="gpn-console-table-wrap">
+          <table class="gpn-console-table" id="socialTable">
+            <thead>
+              <tr>
+                <th>Post ID</th>
+                <th>Title</th>
+                <th>Scheduled</th>
+                <th>Status</th>
+                <th>FB</th>
+                <th>Instagram</th>
+                <th>Threads</th>
+                <th>Pinterest</th>
+                <th>WhatsApp</th>
+              </tr>
+            </thead>
+            <tbody id="socialQueueRows">
+              <tr><td colspan="9" class="gpn-console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <p class="gpn-console-footer-note">GPN Automation Console · Private</p>
+
+</main>
+
+<!-- ============================================================
+     CHANGE PASSWORD MODAL
+     ============================================================ -->
+<div class="gpn-console-modal" id="pwModal" hidden>
+  <div class="gpn-console-modal-card" role="dialog" aria-modal="true">
+    <h3 class="gpn-console-modal-title">Change Password</h3>
+    <p class="gpn-console-modal-sub" id="pwModalSub">
+      Choose a new password of at least 10 characters.
+    </p>
+
+    <form id="pwForm" novalidate>
+      <div class="gpn-console-field">
+        <label class="gpn-console-label" for="pwCurrent">Current Password</label>
+        <input id="pwCurrent" type="password" class="gpn-console-input"
+               autocomplete="current-password" required />
+      </div>
+      <div class="gpn-console-field">
+        <label class="gpn-console-label" for="pwNew">New Password</label>
+        <input id="pwNew" type="password" class="gpn-console-input"
+               autocomplete="new-password" minlength="10" required />
+      </div>
+      <div class="gpn-console-field">
+        <label class="gpn-console-label" for="pwConfirm">Confirm New Password</label>
+        <input id="pwConfirm" type="password" class="gpn-console-input"
+               autocomplete="new-password" minlength="10" required />
+      </div>
+
+      <div id="pwAlert" class="gpn-console-alert gpn-console-alert-err" hidden></div>
+
+      <div class="gpn-console-modal-actions">
+        <button type="button" class="gpn-console-btn" id="pwCancel">Cancel</button>
+        <button type="submit" class="gpn-console-btn gpn-console-btn-cyan" id="pwSubmit">Update Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const API_URL = 'https://script.google.com/macros/s/AKfycbw0yce4NoUdqzHrZLm7ZAGuW8c8MRUFdzSfKRe8YO6Xb4EcgiJ12JuyubL7EjXmrZFZww/exec';
+
+  const TOKEN_KEY  = 'gpn_token';
+  const USER_KEY   = 'gpn_user';
+  const FLASH_KEY  = 'gpn_flash';
+  const LOGIN_PAGE = 'login.html';
+
+  /* ============================================================
+     API
+     ============================================================ */
+  const API = (function () {
+    let onAuthFail = null;
+
+    function getToken() { return sessionStorage.getItem(TOKEN_KEY); }
+    function setSession(token, user) {
+      if (token) sessionStorage.setItem(TOKEN_KEY, token);
+      if (user)  sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+    }
+    function clearSession() {
+      sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(USER_KEY);
+    }
+    function setFlash(msg) {
+      try { sessionStorage.setItem(FLASH_KEY, msg); } catch (e) {}
+    }
+
+    function isAuthError(code) {
+      return ['NO_TOKEN','INVALID_TOKEN','TOKEN_REVOKED','TOKEN_EXPIRED','ACCOUNT_DISABLED']
+        .indexOf(code) !== -1;
+    }
+
+    async function request(action, payload) {
+      const body = Object.assign({ action: action }, payload || {});
+      const token = getToken();
+      if (token) body.token = token;
+
+      let res;
+      try {
+        res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(body),
+          redirect: 'follow'
+        });
+      } catch (e) {
+        return { ok: false, error: 'NETWORK', message: 'Network error.' };
+      }
+
+      let json;
+      try { json = await res.json(); }
+      catch (e) { return { ok: false, error: 'BAD_RESPONSE', message: 'Invalid server response.' }; }
+
+      if (json && json.ok === false && isAuthError(json.error)) {
+        clearSession();
+        if (onAuthFail) onAuthFail(json);
+      }
+      return json;
+    }
+
+    return {
+      request: request,
+      setAuthFailHandler: function (fn) { onAuthFail = fn; },
+      isAuthError: isAuthError,
+      getToken: getToken,
+      setSession: setSession,
+      clearSession: clearSession,
+      setFlash: setFlash,
+
+      me:             function ()     { return request('auth.me'); },
+      logout:         function ()     { return request('auth.logout'); },
+      changePassword: function (c, n) { return request('auth.changePassword', { current_password: c, new_password: n }); },
+      stats:          function ()     { return request('stats.get'); },
+
+      pdfAdd:         function (d)    { return request('pdf.add', d); },
+      pdfList:        function ()     { return request('pdf.list'); },
+
+      socialAdd:      function (d)    { return request('social.add', d); },
+      socialList:     function ()     { return request('social.list'); }
+    };
+  })();
+
+  const $ = function (id) { return document.getElementById(id); };
+
+  const pageLoading = $('pageLoading');
+  const userBadge   = $('userBadge');
+
+  const tabs        = document.querySelectorAll('.gpn-console-tab');
+  const panelPdf    = $('panel-pdf');
+  const panelSocial = $('panel-social');
+
+  const pdfForm     = $('pdfForm');
+  const pdfAlert    = $('pdfFormAlert');
+  const socialForm  = $('socialForm');
+  const socialAlert = $('socialFormAlert');
+
+  const pwModal     = $('pwModal');
+  const pwForm      = $('pwForm');
+  const pwAlert     = $('pwAlert');
+  const pwCancel    = $('pwCancel');
+  const pwSubmit    = $('pwSubmit');
+  const pwModalSub  = $('pwModalSub');
+
+  const state = {
+    user: null,
+    mustChangePassword: false
+  };
+
+  /* ============================================================
+     AUTH FAILURE
+     ============================================================ */
+  API.setAuthFailHandler(function () {
+    API.setFlash('Your session has ended. Please sign in again.');
+    window.location.href = LOGIN_PAGE;
+  });
+
+  function redirectToLogin(msg) {
+    if (msg) API.setFlash(msg);
+    window.location.href = LOGIN_PAGE;
+  }
+
+  /* ============================================================
+     INIT
+     ============================================================ */
+  async function init() {
+    if (!API.getToken()) { redirectToLogin(); return; }
+
+    const me = await API.me();
+    if (!me || !me.ok) {
+      if (!me || !API.isAuthError(me.error)) redirectToLogin();
+      return;
+    }
+
+    state.user = me.data.user;
+    state.mustChangePassword = !!me.data.user.must_change_password;
+    renderUserBadge();
+
+    loadStats();
+    loadPdfQueue();
+    loadSocialQueue();
+
+    pageLoading.hidden = true;
+
+    if (state.mustChangePassword) openPasswordModal(true);
+  }
+
+  function renderUserBadge() {
+    if (!state.user) return;
+    const role = (state.user.role || 'SUPERADMIN').toLowerCase();
+    userBadge.textContent = role === 'superadmin' ? 'SuperAdmin' : state.user.role;
+    userBadge.title = state.user.username + ' · ' + state.user.email;
+  }
+
+  /* ============================================================
+     STATS
+     ============================================================ */
+  async function loadStats() {
+    $('statsMeta').textContent = 'Refreshing…';
+    const res = await API.stats();
+
+    if (!res || !res.ok) {
+      $('statsMeta').textContent = 'Could not load statistics.';
+      ['statPdfTotal','statPdfReady','statPdfProcessing','statPdfCompleted','statPdfErrors',
+       'statSocialTotal','statSocialReady','statSocialProcessing','statSocialCompleted','statSocialErrors']
+        .forEach(function (id) { $(id).textContent = '—'; });
+      return;
+    }
+
+    const p = res.data.pdf || {};
+    const s = res.data.social || {};
+
+    $('statPdfTotal').textContent      = String(p.total      || 0);
+    $('statPdfReady').textContent      = String(p.ready      || 0);
+    $('statPdfProcessing').textContent = String(p.processing || 0);
+    $('statPdfCompleted').textContent  = String(p.completed  || 0);
+    $('statPdfErrors').textContent     = String(p.error      || 0);
+
+    $('statSocialTotal').textContent      = String(s.total      || 0);
+    $('statSocialReady').textContent      = String(s.ready      || 0);
+    $('statSocialProcessing').textContent = String(s.processing || 0);
+    $('statSocialCompleted').textContent  = String(s.completed  || 0);
+    $('statSocialErrors').textContent     = String(s.error      || 0);
+
+    $('statsMeta').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  }
+
+  /* ============================================================
+     TABS
+     ============================================================ */
+  tabs.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const target = btn.getAttribute('data-tab');
+      tabs.forEach(function (b) {
+        const on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      panelPdf.classList.toggle('active', target === 'pdf');
+      panelSocial.classList.toggle('active', target === 'social');
+      loadStats();
+    });
+  });
+
+  /* ============================================================
+     QUEUES
+     ============================================================ */
+  async function loadPdfQueue() {
+    const tbody = $('pdfQueueRows');
+    tbody.innerHTML = '<tr><td colspan="10" class="gpn-console-empty">Loading…</td></tr>';
+
+    const res = await API.pdfList();
+    if (!res || !res.ok) {
+      tbody.innerHTML = '<tr><td colspan="10" class="gpn-console-empty">Could not load queue.</td></tr>';
+      return;
+    }
+    const rows = (res.data && res.data.jobs) || [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="gpn-console-empty">No PDF jobs yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(renderPdfRow).join('');
+  }
+
+  function renderPdfRow(r) {
+    const status = String(r.Status || 'READY').toUpperCase();
+    const r2 = r.R2_URL
+      ? '<a href="' + esc(r.R2_URL) + '" target="_blank" rel="noopener">Open</a>'
+      : '—';
+    const proc = r.Processed_At ? esc(formatDateTime(r.Processed_At)) : '—';
+    const chap = esc((r.Chapter_No ? r.Chapter_No + ' — ' : '') + (r.Chapter_Name || ''));
+
+    return [
+      '<tr>',
+        '<td data-label="ID">'      + esc(r.Job_ID || '') + '</td>',
+        '<td data-label="Title" class="wrap">' + esc(r.Post_Title || '') + '</td>',
+        '<td data-label="Class">'   + esc(r.Class || '') + '</td>',
+        '<td data-label="Subject">' + esc(r.Subject || '') + '</td>',
+        '<td data-label="Chapter" class="wrap">' + chap + '</td>',
+        '<td data-label="Filename">'+ esc(r.PDF_Filename || '') + '</td>',
+        '<td data-label="Status">'  + pill(status) + '</td>',
+        '<td data-label="R2 URL">'  + r2 + '</td>',
+        '<td data-label="Processed">'+ proc + '</td>',
+        '<td data-label="Error" class="wrap">' + esc(r.Error || '—') + '</td>',
+      '</tr>'
+    ].join('');
+  }
+
+  async function loadSocialQueue() {
+    const tbody = $('socialQueueRows');
+    tbody.innerHTML = '<tr><td colspan="9" class="gpn-console-empty">Loading…</td></tr>';
+
+    const res = await API.socialList();
+    if (!res || !res.ok) {
+      tbody.innerHTML = '<tr><td colspan="9" class="gpn-console-empty">Could not load queue.</td></tr>';
+      return;
+    }
+    const rows = (res.data && res.data.posts) || [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="gpn-console-empty">No social posts yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(renderSocialRow).join('');
+  }
+
+  function renderSocialRow(r) {
+    const status = String(r.Status || 'READY').toUpperCase();
+    const sched  = ((r.Publish_Date || '') + ' ' + (r.Publish_Time || '')).trim();
+
+    function p(s) {
+      return pill(String(s || 'PENDING').toUpperCase());
+    }
+    return [
+      '<tr>',
+        '<td data-label="Post ID">'   + esc(r.Post_ID || '') + '</td>',
+        '<td data-label="Title" class="wrap">' + esc(r.Post_Title || '') + '</td>',
+        '<td data-label="Scheduled">' + esc(sched || '—') + '</td>',
+        '<td data-label="Status">'    + pill(status) + '</td>',
+        '<td data-label="FB">'        + p(r.FB_Status) + '</td>',
+        '<td data-label="Instagram">' + p(r.Instagram_Status) + '</td>',
+        '<td data-label="Threads">'   + p(r.Threads_Status) + '</td>',
+        '<td data-label="Pinterest">' + p(r.Pinterest_Status) + '</td>',
+        '<td data-label="WhatsApp">'  + p(r.WhatsApp_Status) + '</td>',
+      '</tr>'
+    ].join('');
+  }
+
+  function pill(status) {
+    const cls = 'gpn-console-pill pill-' + String(status || '').toLowerCase().replace(/[^a-z]/g, '');
+    return '<span class="' + cls + '">' + esc(status) + '</span>';
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function formatDateTime(v) {
+    try {
+      const d = new Date(v);
+      if (isNaN(d.getTime())) return String(v);
+      return d.toLocaleString();
+    } catch (e) { return String(v); }
+  }
+
+  /* ============================================================
+     ALERTS
+     ============================================================ */
+  function showAlert(el, kind, msg) {
+    if (!el) return;
+    el.className = 'gpn-console-alert gpn-console-alert-' + kind;
+    el.textContent = msg;
+    el.hidden = false;
+  }
+  function hideAlert(el) {
+    if (!el) return;
+    el.hidden = true;
+    el.textContent = '';
+  }
+
+  function friendlyApiError(res) {
+    if (!res) return 'Something went wrong. Please try again.';
+    switch (res.error) {
+      case 'NETWORK':        return 'Cannot reach server. Check your connection.';
+      case 'BAD_RESPONSE':   return 'Server returned an unexpected response.';
+      case 'MISSING_FIELDS': return res.message || 'Required fields are missing.';
+      case 'WRITE_FAILED':   return res.message || 'Could not write to the sheet.';
+      default:               return res.message || 'Request failed. Please try again.';
+    }
+  }
+
+  /* ============================================================
+     PDF SUBMIT
+     ============================================================ */
+  pdfForm.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    hideAlert(pdfAlert);
+
+    const data = {
+      blogger_url:  $('pdfBloggerUrl').value.trim(),
+      post_title:   $('pdfPostTitle').value.trim(),
+      class:        $('pdfClass').value.trim(),
+      subject:      $('pdfSubject').value.trim(),
+      chapter_no:   $('pdfChapterNo').value.trim(),
+      chapter_name: $('pdfChapterName').value.trim(),
+      pdf_filename: $('pdfFilename').value.trim(),
+      r2_folder:    $('pdfR2Folder').value.trim(),
+      generate_pdf: $('pdfGenerate').value
+    };
+
+    const required = ['blogger_url','post_title','class','subject','chapter_no','chapter_name','pdf_filename','r2_folder'];
+    for (let i = 0; i < required.length; i++) {
+      if (!data[required[i]]) {
+        showAlert(pdfAlert, 'err', 'Please complete all fields before adding to the queue.');
+        return;
+      }
+    }
+
+    $('pdfSubmitBtn').disabled = true;
+    const res = await API.pdfAdd(data);
+    $('pdfSubmitBtn').disabled = false;
+
+    if (!res || !res.ok) {
+      showAlert(pdfAlert, 'err', friendlyApiError(res));
+      return;
+    }
+
+    showAlert(pdfAlert, 'ok', 'PDF job added successfully. ID: ' + res.data.job_id);
+    pdfForm.reset();
+    $('pdfGenerate').value = 'YES';
+    loadStats();
+    loadPdfQueue();
+  });
+
+  /* ============================================================
+     SOCIAL SUBMIT
+     ============================================================ */
+  socialForm.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    hideAlert(socialAlert);
+
+    const data = {
+      post_title:   $('socTitle').value.trim(),
+      post_summary: $('socSummary').value.trim(),
+
+      fb_caption:           $('socFbCaption').value.trim(),
+      fb_image_url:         $('socFbImage').value.trim(),
+      instagram_caption:    $('socIgCaption').value.trim(),
+      instagram_image_url:  $('socIgImage').value.trim(),
+      threads_caption:      $('socThCaption').value.trim(),
+      threads_image_url:    $('socThImage').value.trim(),
+      pinterest_caption:    $('socPinCaption').value.trim(),
+      pinterest_image_url:  $('socPinImage').value.trim(),
+      whatsapp_caption:     $('socWaCaption').value.trim(),
+      whatsapp_image_url:   $('socWaImage').value.trim(),
+
+      publish_date: $('socDate').value,
+      publish_time: $('socTime').value
+    };
+
+    if (!data.post_title) {
+      showAlert(socialAlert, 'err', 'Post title is required.');
+      return;
+    }
+    if (!data.publish_date || !data.publish_time) {
+      showAlert(socialAlert, 'err', 'Publish date and time are required.');
+      return;
+    }
+    const hasPlatform = ['fb_caption','instagram_caption','threads_caption','pinterest_caption','whatsapp_caption']
+      .some(function (k) { return !!data[k]; });
+    if (!hasPlatform) {
+      showAlert(socialAlert, 'err', 'Provide a caption for at least one platform.');
+      return;
+    }
+
+    $('socialSubmitBtn').disabled = true;
+    const res = await API.socialAdd(data);
+    $('socialSubmitBtn').disabled = false;
+
+    if (!res || !res.ok) {
+      showAlert(socialAlert, 'err', friendlyApiError(res));
+      return;
+    }
+
+    showAlert(socialAlert, 'ok', 'Social post added successfully. ID: ' + res.data.post_id);
+    socialForm.reset();
+    loadStats();
+    loadSocialQueue();
+  });
+
+  /* ============================================================
+     CHANGE PASSWORD
+     ============================================================ */
+  function openPasswordModal(forced) {
+    pwAlert.hidden = true;
+    pwForm.reset();
+    pwCancel.hidden = !!forced;
+    pwModalSub.textContent = forced
+      ? 'Your account requires a password change before you can continue.'
+      : 'Choose a new password of at least 10 characters.';
+    pwModal.hidden = false;
+    setTimeout(function () { $('pwCurrent').focus(); }, 20);
+  }
+  function closePasswordModal() {
+    if (state.mustChangePassword) return;
+    pwModal.hidden = true;
+    pwAlert.hidden = true;
+  }
+
+  $('btnChangePw').addEventListener('click', function () { openPasswordModal(false); });
+  pwCancel.addEventListener('click', closePasswordModal);
+  pwModal.addEventListener('click', function (e) {
+    if (e.target === pwModal) closePasswordModal();
+  });
+
+  pwForm.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    pwAlert.hidden = true;
+
+    const current = $('pwCurrent').value;
+    const next    = $('pwNew').value;
+    const confirm = $('pwConfirm').value;
+
+    if (!current || !next || !confirm) {
+      showAlert(pwAlert, 'err', 'Please fill in all fields.');
+      return;
+    }
+    if (next.length < 10) {
+      showAlert(pwAlert, 'err', 'New password must be at least 10 characters.');
+      return;
+    }
+    if (next !== confirm) {
+      showAlert(pwAlert, 'err', 'New password and confirmation do not match.');
+      return;
+    }
+    if (next === current) {
+      showAlert(pwAlert, 'err', 'New password must differ from the current one.');
+      return;
+    }
+
+    pwSubmit.disabled = true;
+    const res = await API.changePassword(current, next);
+    pwSubmit.disabled = false;
+
+    if (!res || !res.ok) {
+      showAlert(pwAlert, 'err', friendlyApiError(res));
+      return;
+    }
+
+    API.setSession(res.data.token, state.user);
+    state.mustChangePassword = false;
+    pwModal.hidden = true;
+    pwForm.reset();
+  });
+
+  /* ============================================================
+     LOGOUT
+     ============================================================ */
+  $('btnLogout').addEventListener('click', async function () {
+    this.disabled = true;
+    try { await API.logout(); } catch (e) {}
+    API.clearSession();
+    redirectToLogin('Signed out.');
+  });
+
+  /* ============================================================
+     REFRESH
+     ============================================================ */
+  $('btnRefreshStats').addEventListener('click', loadStats);
+  $('btnReloadPdf').addEventListener('click', function () { loadPdfQueue(); loadStats(); });
+  $('btnReloadSocial').addEventListener('click', function () { loadSocialQueue(); loadStats(); });
+
+  init();
+})();
+</script>
+</body>
+</html>
