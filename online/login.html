@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Sign in — Guided Path One-on-One</title>
+<style>
+:root{--bg:#060f1e;--bg2:#0a192f;--bg3:#102844;--line:rgba(0,184,212,.22);--l2:rgba(0,184,212,.12);--cy:#00e5ff;--gold:#ffd54f;--tx:#e0e0e0;--mu:#8a9bb0;--dng:#ff6b6b;--ok:#4caf50}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--tx);font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.5;overflow-x:hidden;-webkit-text-size-adjust:100%}
+.shell{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:radial-gradient(circle at 20% 20%,rgba(0,184,212,.08),transparent 55%),radial-gradient(circle at 80% 80%,rgba(255,213,79,.05),transparent 55%),var(--bg)}
+.card{width:100%;max-width:420px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:28px 24px;box-shadow:0 8px 40px rgba(0,0,0,.4)}
+.brand{text-align:center;margin-bottom:22px}
+.title{font-size:1.5rem;font-weight:700;color:#fff;line-height:1.2}
+.title span{color:var(--cy)}
+.sub{color:var(--mu);font-size:.78rem;margin-top:6px;letter-spacing:.12em;text-transform:uppercase}
+.rtabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
+.rtab{padding:10px;text-align:center;border:1px solid var(--l2);border-radius:6px;background:transparent;color:var(--mu);font-family:inherit;font-size:.82rem;font-weight:700;letter-spacing:.06em;cursor:pointer;text-transform:uppercase;transition:.15s}
+.rtab.active{border-color:var(--cy);color:var(--gold);background:rgba(0,184,212,.08)}
+.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
+.fg label{font-size:.7rem;color:var(--mu);letter-spacing:.08em;text-transform:uppercase}
+.fg input{width:100%;padding:11px 12px;background:rgba(0,0,0,.35);border:1px solid var(--l2);border-radius:6px;color:var(--tx);font-family:inherit;font-size:.95rem;min-height:44px}
+.fg input:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 2px rgba(0,229,255,.12)}
+.err,.okbox{display:none;padding:10px 12px;border-radius:6px;font-size:.85rem;margin-bottom:12px}
+.err{background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.4);color:#ffbaba}
+.okbox{background:rgba(76,175,80,.08);border:1px solid rgba(76,175,80,.4);color:#b6e8b6}
+.err.show,.okbox.show{display:block}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 18px;font-family:inherit;font-size:.88rem;font-weight:700;letter-spacing:.04em;border-radius:6px;cursor:pointer;border:1px solid rgba(255,213,79,.45);background:rgba(255,213,79,.06);color:var(--gold);min-height:44px;width:100%}
+.btn:hover:not(:disabled){background:rgba(255,213,79,.14);border-color:var(--gold)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,213,79,.25);border-top-color:var(--gold);border-radius:50%;animation:sp .8s linear infinite;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.quiet{color:var(--mu);font-size:.78rem;text-align:center;margin-top:18px;line-height:1.6}
+.quiet a{color:var(--cy);text-decoration:none}
+.quiet a:hover{text-decoration:underline}
+.tw{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:8px;max-width:calc(100% - 32px);pointer-events:none}
+.tt{background:var(--bg3);border:1px solid var(--line);color:var(--tx);padding:10px 16px;border-radius:6px;font-size:.85rem;box-shadow:0 4px 16px rgba(0,0,0,.4);pointer-events:auto}
+.tt.ok{border-color:rgba(76,175,80,.5);color:#b6e8b6}
+.tt.error{border-color:rgba(255,107,107,.5);color:#ffbaba}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="card">
+    <div class="brand">
+      <div class="title">Guided Path <span>One-on-One</span></div>
+      <div class="sub">Secure sign-in</div>
+    </div>
+
+    <div id="alreadyBox" class="okbox"></div>
+
+    <div class="rtabs" role="tablist">
+      <button type="button" class="rtab active" data-role="STUDENT">Student</button>
+      <button type="button" class="rtab" data-role="ADMIN">Administrator</button>
+    </div>
+
+    <form id="loginForm" novalidate>
+      <div class="fg">
+        <label for="loginId" id="loginIdLabel">Student ID</label>
+        <input id="loginId" type="text"
+               autocapitalize="none"
+               autocorrect="off"
+               spellcheck="false"
+               autocomplete="username"
+               inputmode="text"
+               required>
+      </div>
+      <div class="fg">
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" required minlength="6">
+      </div>
+      <div id="loginError" class="err" role="alert"></div>
+      <button id="loginBtn" type="submit" class="btn">Sign in</button>
+    </form>
+
+    <div class="quiet">
+      Need help? <a href="https://wa.me/guidedpathnoida" target="_blank" rel="noopener">Contact on WhatsApp</a>
+    </div>
+  </div>
+</div>
+
+<div class="tw" id="toastWrap"></div>
+
+<script>
+(function(){
+'use strict';
+var GPN_API_URL='https://script.google.com/macros/s/AKfycbx0dOo1ovROMdFYedx4Gm3a1tmpZjjXEwqcxLjCzWXC3Tgxupo9Mc3obk5zDS3uat_7/exec';
+var K_TOKEN='gpn_token',K_ROLE='gpn_role',K_USER='gpn_user',K_NAME='gpn_name';
+
+function toast(msg,kind){
+  var w=document.getElementById('toastWrap');
+  var el=document.createElement('div');
+  el.className='tt '+(kind||'');
+  el.textContent=msg;
+  w.appendChild(el);
+  setTimeout(function(){el.remove();},4000);
+}
+function clearSession(){
+  [K_TOKEN,K_ROLE,K_USER,K_NAME].forEach(function(k){
+    localStorage.removeItem(k); sessionStorage.removeItem(k);
+  });
+}
+async function apiCall(action, payload, token){
+  try{
+    var res=await fetch(GPN_API_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:action,token:token||'',payload:payload||{}}),
+      redirect:'follow'
+    });
+    return await res.json();
+  }catch(e){ return {ok:false,error:'Network error. Check connection.',code:'NETWORK'}; }
+}
+
+var role='STUDENT';
+var tabs=document.querySelectorAll('.rtab');
+var idLabel=document.getElementById('loginIdLabel');
+var form=document.getElementById('loginForm');
+var btn=document.getElementById('loginBtn');
+var errBox=document.getElementById('loginError');
+var already=document.getElementById('alreadyBox');
+
+tabs.forEach(function(t){
+  t.addEventListener('click', function(){
+    role=t.getAttribute('data-role');
+    tabs.forEach(function(x){
+      var on=(x===t);
+      x.classList.toggle('active',on);
+    });
+    idLabel.textContent = role==='ADMIN' ? 'Admin ID' : 'Student ID';
+    errBox.classList.remove('show');
+  });
+});
+function showError(m){ errBox.textContent=m; errBox.classList.add('show'); }
+
+form.addEventListener('submit', async function(e){
+  e.preventDefault();
+  errBox.classList.remove('show');
+  var lid=document.getElementById('loginId').value.trim();
+  var pw=document.getElementById('password').value;
+  if(!lid) return showError('Please enter your ID.');
+  if(!pw) return showError('Please enter your password.');
+  if(pw.length<6) return showError('Password must be at least 6 characters.');
+
+  btn.disabled=true;
+  var old=btn.textContent;
+  btn.innerHTML='<span class="spin"></span>Signing in…';
+
+  var r=await apiCall('login',{loginId:lid,password:pw,role:role});
+
+  btn.disabled=false;
+  btn.textContent=old;
+
+  if(!r||!r.ok){
+    var m=(r&&r.error)||'Sign-in failed.';
+    if(r&&r.code==='INVALID_CREDENTIALS') m='Invalid ID or password.';
+    if(r&&r.code==='ACCOUNT_INACTIVE') m='Account is inactive. Contact your teacher.';
+    return showError(m);
+  }
+  var d=r.data||{};
+  localStorage.setItem(K_TOKEN,d.token||'');
+  localStorage.setItem(K_ROLE,String(d.role||role).toUpperCase());
+  localStorage.setItem(K_USER,d.userId||lid);
+  localStorage.setItem(K_NAME,d.name||'');
+
+  toast('Welcome, '+(d.name||d.userId)+'.','ok');
+  setTimeout(function(){
+    window.location.href=(String(d.role).toUpperCase()==='ADMIN')?'admin.html':'student.html';
+  },400);
+});
+
+window.addEventListener('load', function(){
+  var t=localStorage.getItem(K_TOKEN);
+  var r=localStorage.getItem(K_ROLE);
+  if(t&&r){
+    already.textContent='Already signed in as '+(localStorage.getItem(K_NAME)||localStorage.getItem(K_USER)||'')+'. Redirecting…';
+    already.classList.add('show');
+    setTimeout(function(){
+      window.location.href=(r==='ADMIN')?'admin.html':'student.html';
+    },900);
+    return;
+  }
+  document.getElementById('loginId').focus();
+});
+})();
+</script>
+</body>
+</html>
