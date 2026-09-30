@@ -1,1 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>E-Store — GPN Admin</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body>
 
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">E-Store <b>Admin</b></div>
+    </div>
+    <div class="gpn-topbar-user">
+      <span class="gpn-user-badge" id="userBadge">—</span>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnLogout" type="button">Logout</button>
+    </div>
+  </header>
+
+  <nav class="gpn-navstrip">
+    <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
+    <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
+    <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
+    <a class="gpn-navstrip-btn active" href="admin-estore.html">E-Store</a>
+    <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
+    <a class="gpn-navstrip-btn" href="admin-settings.html">Settings</a>
+  </nav>
+
+  <main class="gpn-main">
+
+    <div class="gpn-chips" id="subTabs">
+      <button class="gpn-chip active" data-view="overview">Overview</button>
+      <button class="gpn-chip" data-view="products">Products</button>
+      <button class="gpn-chip" data-view="orders">Orders</button>
+      <button class="gpn-chip" data-view="coupons">Coupons</button>
+      <button class="gpn-chip" data-view="referrals">Referrals</button>
+    </div>
+
+    <div id="viewRoot">
+      <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+    </div>
+
+  </main>
+</div>
+
+<div class="gpn-modal" id="modalGeneric" hidden>
+  <div class="gpn-modal-card" id="modalGenericCard"></div>
+</div>
+
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  if (!GPN.Guard.requireAdmin()) return;
+
+  var viewRoot = null;
+  var appRoot  = null;
+  var currentProductType = 'Booklet';
+
+  GPN.ready(function () {
+    appRoot  = GPN.byId('appRoot');
+    viewRoot = GPN.byId('viewRoot');
+
+    GPN.byId('userBadge').textContent = GPN.Session.getName() || 'Admin';
+    GPN.byId('userBadge').title = GPN.Session.getUser() || '';
+
+    GPN.$$('#subTabs .gpn-chip').forEach(function (btn) {
+      GPN.on(btn, 'click', function () {
+        GPN.$$('#subTabs .gpn-chip').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        render(btn.dataset.view);
+      });
+    });
+
+    GPN.on(GPN.byId('btnLogout'), 'click', function () {
+      if (confirm('Sign out?')) GPN.Guard.logout();
+    });
+
+    GPN.Modal.wire('modalGeneric');
+
+    appRoot.hidden = false;
+    GPN.byId('pageLoading').hidden = true;
+
+    render('overview');
+  });
+
+  function render(view) {
+    GPN.showContainerLoading(viewRoot, 'Loading…');
+    var fn = VIEWS[view] || VIEWS.overview;
+    Promise.resolve(fn()).catch(function (err) {
+      console.error(view, err);
+      GPN.showContainerError(viewRoot, 'Failed to load.');
+    });
+  }
+
+  function openModal(html, onReady) {
+    GPN.byId('modalGenericCard').innerHTML = html;
+    GPN.Modal.open('modalGeneric');
+    if (typeof onReady === 'function') setTimeout(onReady, 20);
+  }
+  function closeModal() { GPN.Modal.close('modalGeneric'); }
+
+  function esc(s) { return GPN.esc(s); }
+  function fmtDate(d) { return GPN.formatDate(d); }
+  function fmtCur(n) { return GPN.formatCurrency(n); }
+  function pill(text, tone) {
+    var cls = tone || String(text || '').toLowerCase().replace(/[^a-z]/g, '');
+    return '<span class="gpn-pill ' + esc(cls) + '">' + esc(text) + '</span>';
+  }
+  function statCard(label, value, tone) {
+    return '<div class="gpn-stat"><span class="gpn-stat-label">' + esc(label) + '</span><span class="gpn-stat-value ' + (tone || '') + '">' + esc(String(value)) + '</span></div>';
+  }
+  function classSelect(id, value) {
+    var opts = (window.GPN_CONFIG.CLASSES || []).map(function (c) {
+      return '<option value="' + esc(c) + '"' + (value === c ? ' selected' : '') + '>' + esc(c) + '</option>';
+    }).join('');
+    return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
+  }
+
+  var VIEWS = {};
+
+  /* ============================================================
+     OVERVIEW
+     ============================================================ */
+  VIEWS.overview = function () {
+    return GPN.api('adminEstoreStats').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var d = j.data || {};
+      var counts = d.productCounts || {};
+
+      var totalProducts = 0, activeProducts = 0;
+      ['Booklet', 'Test Pack', 'Material Pack', 'Course'].forEach(function (t) {
+        totalProducts += Number((counts[t] && counts[t].total) || 0);
+        activeProducts += Number((counts[t] && counts[t].active) || 0);
+      });
+
+      var html = '<div class="gpn-stats">' +
+        statCard('Total Products', totalProducts) +
+        statCard('Active', activeProducts, 'green') +
+        statCard('Total Orders', d.totalOrders || 0) +
+        statCard('Orders This Month', d.ordersThisMonth || 0, 'gold') +
+        statCard('Total Revenue', fmtCur(d.totalRevenue || 0), 'gold') +
+        statCard('Month Revenue', fmtCur(d.monthRevenue || 0), 'gold') +
+      '</div>';
+
+      html += '<div class="gpn-grid-4">';
+      ['Booklet', 'Test Pack', 'Material Pack', 'Course'].forEach(function (t) {
+        var c = counts[t] || { total: 0, active: 0 };
+        html += '<div class="gpn-card"><div class="gpn-card-body">' +
+          '<div class="gpn-quiet" style="font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;">' + esc(t) + '</div>' +
+          '<div style="font-family:var(--font-serif);font-size:1.5rem;font-weight:700;color:var(--cyan-bright);margin:4px 0;">' + c.total + '</div>' +
+          '<div class="gpn-quiet" style="font-size:0.72rem;">' + c.active + ' active · ' + (c.total - c.active) + ' hidden</div>' +
+        '</div></div>';
+      });
+      html += '</div>';
+
+      if (d.topProducts && d.topProducts.length) {
+        html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Top Products by Revenue</h3></div>' +
+          '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Product</th><th>Orders</th><th>Revenue</th></tr></thead><tbody>';
+        d.topProducts.forEach(function (p) {
+          html += '<tr>' +
+            '<td data-label="Product">' + esc(p.name || p.productId) + '</td>' +
+            '<td data-label="Orders">' + esc(p.count) + '</td>' +
+            '<td data-label="Revenue" style="color:var(--gold);font-weight:700;">' + fmtCur(p.revenue || 0) + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div></div>';
+      }
+
+      viewRoot.innerHTML = html;
+    });
+  };
+
+  /* ============================================================
+     PRODUCTS (with inner type chips)
+     ============================================================ */
+  VIEWS.products = function () {
+    var types = ['Booklet', 'Test Pack', 'Material Pack', 'Course'];
+
+    var html =
+      '<div class="gpn-chips" id="prodTypeChips">' +
+        types.map(function (t) {
+          return '<button class="gpn-chip' + (t === currentProductType ? ' active' : '') + '" data-type="' + esc(t) + '">' + esc(t) + 's</button>';
+        }).join('') +
+      '</div>' +
+      '<div id="prodListWrap"><div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div></div>';
+
+    viewRoot.innerHTML = html;
+
+    GPN.$$('#prodTypeChips .gpn-chip').forEach(function (b) {
+      GPN.on(b, 'click', function () {
+        currentProductType = b.dataset.type;
+        GPN.$$('#prodTypeChips .gpn-chip').forEach(function (x) { x.classList.remove('active'); });
+        b.classList.add('active');
+        loadProducts(currentProductType);
+      });
+    });
+
+    loadProducts(currentProductType);
+  };
+
+  function loadProducts(type) {
+    GPN.showContainerLoading(GPN.byId('prodListWrap'), 'Loading ' + type + 's…');
+    GPN.api('adminEstoreProductList', { type: type }).then(function (j) {
+      if (!j.ok) { GPN.showContainerError(GPN.byId('prodListWrap'), GPN.friendlyError(j)); return; }
+      var rows = (j.data && j.data.products) || [];
+
+      var html = '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h3 class="gpn-card-title">' + esc(type) + 's (' + rows.length + ')</h3>' +
+          '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddProd">+ Add ' + esc(type) + '</button>' +
+        '</div>';
+
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No ' + esc(type) + 's yet. Click Add to create the first one.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr>' +
+            '<th>ID</th><th>Name</th><th>Class</th><th>Tag</th><th>Price</th><th>Discount</th><th>Status</th><th>Actions</th>' +
+          '</tr></thead><tbody>';
+        rows.forEach(function (p) {
+          var priceHtml = p.HasDiscount
+            ? '<span style="text-decoration:line-through;color:var(--tx-faint);">' + fmtCur(p.Price) + '</span> <span style="color:var(--gold);font-weight:700;">' + fmtCur(p.DiscountedPrice) + '</span>'
+            : '<span style="color:var(--gold);font-weight:700;">' + fmtCur(p.Price) + '</span>';
+          html += '<tr>' +
+            '<td data-label="ID" class="gpn-mono">' + esc(p.ProductID) + '</td>' +
+            '<td data-label="Name" class="wrap">' + esc(p.Name) + '</td>' +
+            '<td data-label="Class">' + esc(p.Class || '—') + '</td>' +
+            '<td data-label="Tag">' + (p.Tag ? pill(p.Tag, 'info') : '—') + '</td>' +
+            '<td data-label="Price">' + priceHtml + '</td>' +
+            '<td data-label="Discount">' + (p.DiscountPercent > 0 ? esc(p.DiscountPercent) + '%' : '—') + '</td>' +
+            '<td data-label="Status">' + pill(p.Status || '') + '</td>' +
+            '<td data-label="Actions">' +
+              '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-edit="' + esc(p.ProductID) + '">Edit</button> ' +
+              '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-toggle="' + esc(p.ProductID) + '" data-status="' + esc(p.Status || '') + '">' + (String(p.Status).toUpperCase() === 'ACTIVE' ? 'Hide' : 'Show') + '</button> ' +
+              '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-del="' + esc(p.ProductID) + '">Delete</button>' +
+            '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+
+      html += '</div>';
+      GPN.byId('prodListWrap').innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddProd'), 'click', function () { addProductModal(type); });
+      GPN.$$('button[data-edit]').forEach(function (b) {
+        GPN.on(b, 'click', function () { editProductModal(type, b.dataset.edit); });
+      });
+      GPN.$$('button[data-toggle]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          var next = String(b.dataset.status).toUpperCase() === 'ACTIVE' ? 'HIDDEN' : 'ACTIVE';
+          GPN.api('adminEstoreProductUpdate', { type: type, id: b.dataset.toggle, patch: { Status: next } }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Visibility updated.'); loadProducts(type);
+          });
+        });
+      });
+      GPN.$$('button[data-del]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          if (!confirm('Delete ' + b.dataset.del + '? This is permanent.')) return;
+          GPN.api('adminEstoreProductDelete', { type: type, id: b.dataset.del }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Deleted.'); loadProducts(type);
+          });
+        });
+      });
+    });
+  }
+
+  function productForm_(prefix, p) {
+    p = p || {};
+    return '<div class="gpn-field"><label class="gpn-label">Name</label><input id="' + prefix + 'Name" class="gpn-input" value="' + esc(p.Name || '') + '"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Image URL</label><input id="' + prefix + 'Img" class="gpn-input" value="' + esc(p.ImageURL || '') + '" placeholder="https://assets.guidedpathnoida.in/..."></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Description</label><textarea id="' + prefix + 'Desc" class="gpn-textarea" rows="3">' + esc(p.Description || '') + '</textarea></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Price (₹)</label><input id="' + prefix + 'Price" class="gpn-input" type="number" min="0" value="' + esc(p.Price || 0) + '"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Discount (%)</label><input id="' + prefix + 'Disc" class="gpn-input" type="number" min="0" max="100" value="' + esc(p.DiscountPercent || 0) + '"></div>' +
+      '</div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Class</label>' + classSelect(prefix + 'Class', p.Class || '') + '</div>' +
+        '<div class="gpn-field"><label class="gpn-label">Tag (optional)</label><input id="' + prefix + 'Tag" class="gpn-input" value="' + esc(p.Tag || '') + '" placeholder="New / Bestseller"></div>' +
+      '</div>' +
+      '<div class="gpn-field"><label class="gpn-label">Display Order</label><input id="' + prefix + 'Order" class="gpn-input" type="number" value="' + esc(p.DisplayOrder || 0) + '"><span class="gpn-hint">Lower number = shows first. Default 0.</span></div>';
+  }
+
+  function readProductForm_(prefix) {
+    return {
+      Name: GPN.byId(prefix + 'Name').value.trim(),
+      ImageURL: GPN.byId(prefix + 'Img').value.trim(),
+      Description: GPN.byId(prefix + 'Desc').value.trim(),
+      Price: GPN.byId(prefix + 'Price').value,
+      DiscountPercent: GPN.byId(prefix + 'Disc').value,
+      Class: GPN.byId(prefix + 'Class').value,
+      Tag: GPN.byId(prefix + 'Tag').value.trim(),
+      DisplayOrder: GPN.byId(prefix + 'Order').value
+    };
+  }
+
+  function addProductModal(type) {
+    var html =
+      '<h3 class="gpn-modal-title">Add ' + esc(type) + '</h3>' +
+      productForm_('np', {}) +
+      '<div id="npErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="npCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-cyan" id="npSave">Create</button>' +
+      '</div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('npCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('npSave'), 'click', function () {
+        var err = GPN.byId('npErr'); err.hidden = true;
+        var payload = readProductForm_('np');
+        if (!payload.Name) { err.textContent = 'Name required.'; err.hidden = false; return; }
+        var btn = GPN.byId('npSave');
+        GPN.setLoading(btn, true, 'Creating…');
+        GPN.api('adminEstoreProductCreate', Object.assign({ type: type }, payload)).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Created: ' + (r.data.ProductID || '')); closeModal(); loadProducts(type);
+        });
+      });
+    });
+  }
+
+  function editProductModal(type, id) {
+    GPN.api('adminEstoreProductGet', { type: type, id: id }).then(function (j) {
+      if (!j.ok || !j.data || !j.data.product) { GPN.Toast.error('Not found.'); return; }
+      var p = j.data.product;
+      var html =
+        '<h3 class="gpn-modal-title">Edit ' + esc(p.Name) + '</h3>' +
+        '<p class="gpn-modal-sub">' + esc(p.ProductID) + '</p>' +
+        productForm_('ep', p) +
+        '<div id="epErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+        '<div class="gpn-modal-actions">' +
+          '<button class="gpn-btn gpn-btn-ghost" id="epCancel">Cancel</button>' +
+          '<button class="gpn-btn gpn-btn-cyan" id="epSave">Save</button>' +
+        '</div>';
+      openModal(html, function () {
+        GPN.on(GPN.byId('epCancel'), 'click', closeModal);
+        GPN.on(GPN.byId('epSave'), 'click', function () {
+          var err = GPN.byId('epErr'); err.hidden = true;
+          var patch = readProductForm_('ep');
+          if (!patch.Name) { err.textContent = 'Name required.'; err.hidden = false; return; }
+          var btn = GPN.byId('epSave');
+          GPN.setLoading(btn, true, 'Saving…');
+          GPN.api('adminEstoreProductUpdate', { type: type, id: id, patch: patch }).then(function (r) {
+            GPN.setLoading(btn, false);
+            if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+            GPN.Toast.ok('Saved.'); closeModal(); loadProducts(type);
+          });
+        });
+      });
+    });
+  }
+
+  /* ============================================================
+     ORDERS
+     ============================================================ */
+  VIEWS.orders = function () {
+    return GPN.api('adminEstoreOrderList').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var rows = (j.data && j.data.orders) || [];
+      var totalRevenue = rows.reduce(function (s, o) { return s + Number(o.AmountPaid || 0); }, 0);
+
+      var html = '<div class="gpn-stats">' +
+        statCard('Total Orders', rows.length) +
+        statCard('Total Revenue', fmtCur(totalRevenue), 'gold') +
+      '</div>';
+
+      html += '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Orders</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddOrder">+ Record Order</button>' +
+        '</div>';
+
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No orders yet. Record sales as they close on WhatsApp.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr>' +
+            '<th>Order</th><th>Date</th><th>Customer</th><th>Product</th><th>Qty</th><th>Amount</th><th>Method</th><th>Actions</th>' +
+          '</tr></thead><tbody>';
+        rows.forEach(function (o) {
+          html += '<tr>' +
+            '<td data-label="Order" class="gpn-mono">' + esc(o.OrderID) + '</td>' +
+            '<td data-label="Date">' + esc(fmtDate(o.Date)) + '</td>' +
+            '<td data-label="Customer">' + esc(o.CustomerName || '') + '</td>' +
+            '<td data-label="Product" class="wrap">' + esc(o.ProductName || o.ProductID || '') + '</td>' +
+            '<td data-label="Qty">' + esc(o.Quantity || 1) + '</td>' +
+            '<td data-label="Amount" style="color:var(--gold);font-weight:700;">' + fmtCur(o.AmountPaid || 0) + '</td>' +
+            '<td data-label="Method">' + esc(o.Method || '') + '</td>' +
+            '<td data-label="Actions"><button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-del="' + esc(o.OrderID) + '">Delete</button></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddOrder'), 'click', addOrderModal);
+      GPN.$$('button[data-del]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          if (!confirm('Delete order ' + b.dataset.del + '?')) return;
+          GPN.api('adminEstoreOrderDelete', { orderId: b.dataset.del }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Deleted.'); render('orders');
+          });
+        });
+      });
+    });
+  };
+
+  function addOrderModal() {
+    var html =
+      '<h3 class="gpn-modal-title">Record Order</h3>' +
+      '<p class="gpn-modal-sub">Enter sale details after payment confirmed on WhatsApp.</p>' +
+      '<div class="gpn-field"><label class="gpn-label">Customer Name</label><input id="orName" class="gpn-input"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Phone</label><input id="orPhone" class="gpn-input" inputmode="tel"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Product ID</label><input id="orProdId" class="gpn-input" placeholder="BOOK-0001 / TPK-0001 / etc."><span class="gpn-hint">Type the Product ID from the Products tab.</span></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Quantity</label><input id="orQty" class="gpn-input" type="number" value="1" min="1"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Amount Paid (₹)</label><input id="orAmt" class="gpn-input" type="number"></div>' +
+      '</div>' +
+      '<div class="gpn-field"><label class="gpn-label">Method</label>' +
+        '<select id="orMethod" class="gpn-select">' + ['UPI','NEFT','Cash','Card','Other'].map(function (m) { return '<option>' + m + '</option>'; }).join('') + '</select>' +
+      '</div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Coupon Code (optional)</label><input id="orCoupon" class="gpn-input"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Referral Code (optional)</label><input id="orReferral" class="gpn-input"></div>' +
+      '</div>' +
+      '<div class="gpn-field"><label class="gpn-label">Date</label><input id="orDate" class="gpn-input" type="date" value="' + GPN.todayISO() + '"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Notes</label><textarea id="orNotes" class="gpn-textarea" rows="2"></textarea></div>' +
+      '<div id="orErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="orCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-cyan" id="orSave">Record</button>' +
+      '</div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('orCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('orSave'), 'click', function () {
+        var err = GPN.byId('orErr'); err.hidden = true;
+        var payload = {
+          CustomerName: GPN.byId('orName').value.trim(),
+          Phone:        GPN.byId('orPhone').value.trim(),
+          ProductID:    GPN.byId('orProdId').value.trim(),
+          Quantity:     GPN.byId('orQty').value,
+          AmountPaid:   GPN.byId('orAmt').value,
+          Method:       GPN.byId('orMethod').value,
+          CouponCode:   GPN.byId('orCoupon').value.trim(),
+          ReferralCode: GPN.byId('orReferral').value.trim(),
+          Date:         GPN.byId('orDate').value,
+          Notes:        GPN.byId('orNotes').value.trim()
+        };
+        if (!payload.CustomerName) { err.textContent = 'Customer name required.'; err.hidden = false; return; }
+        if (!payload.ProductID) { err.textContent = 'Product ID required.'; err.hidden = false; return; }
+        if (!payload.AmountPaid) { err.textContent = 'Amount required.'; err.hidden = false; return; }
+        var btn = GPN.byId('orSave');
+        GPN.setLoading(btn, true, 'Recording…');
+        GPN.api('adminEstoreOrderCreate', payload).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Recorded: ' + (r.data.OrderID || ''));
+          closeModal(); render('orders');
+        });
+      });
+    });
+  }
+
+  /* ============================================================
+     COUPONS
+     ============================================================ */
+  VIEWS.coupons = function () {
+    return GPN.api('adminEstoreCouponList').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var rows = (j.data && j.data.coupons) || [];
+
+      var html = '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h3 class="gpn-card-title">Coupons (' + rows.length + ')</h3>' +
+          '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddCoupon">+ Add</button>' +
+        '</div>';
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No coupons yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Code</th><th>Type</th><th>Value</th><th>Used</th><th>Limit</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+        rows.forEach(function (c) {
+          var valueText = String(c.Type).toUpperCase() === 'PERCENT' ? c.Value + '%' : fmtCur(c.Value);
+          html += '<tr>' +
+            '<td data-label="Code" class="gpn-mono">' + esc(c.Code) + '</td>' +
+            '<td data-label="Type">' + esc(c.Type) + '</td>' +
+            '<td data-label="Value">' + esc(valueText) + '</td>' +
+            '<td data-label="Used">' + esc(c.UsedCount || 0) + '</td>' +
+            '<td data-label="Limit">' + esc(c.UsageLimit || '∞') + '</td>' +
+            '<td data-label="Status">' + pill(c.Status || '') + '</td>' +
+            '<td data-label="Actions">' +
+              '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-toggle="' + esc(c.CouponID) + '" data-status="' + esc(c.Status || '') + '">' + (String(c.Status).toUpperCase() === 'ACTIVE' ? 'Deactivate' : 'Activate') + '</button> ' +
+              '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-del="' + esc(c.CouponID) + '">Delete</button>' +
+            '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddCoupon'), 'click', addCouponModal);
+      GPN.$$('button[data-toggle]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          var next = String(b.dataset.status).toUpperCase() === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+          GPN.api('adminEstoreCouponUpdate', { id: b.dataset.toggle, patch: { Status: next } }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Updated.'); render('coupons');
+          });
+        });
+      });
+      GPN.$$('button[data-del]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          if (!confirm('Delete coupon?')) return;
+          GPN.api('adminEstoreCouponDelete', { id: b.dataset.del }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Deleted.'); render('coupons');
+          });
+        });
+      });
+    });
+  };
+
+  function addCouponModal() {
+    var html =
+      '<h3 class="gpn-modal-title">Add Coupon</h3>' +
+      '<div class="gpn-field"><label class="gpn-label">Code (uppercase)</label><input id="cpCode" class="gpn-input" placeholder="LAUNCH10" autocapitalize="characters"></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Type</label><select id="cpType" class="gpn-select"><option>PERCENT</option><option>FIXED</option></select></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Value</label><input id="cpValue" class="gpn-input" type="number"></div>' +
+      '</div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Min Order (₹)</label><input id="cpMin" class="gpn-input" type="number" value="0"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Usage Limit (0 = unlimited)</label><input id="cpLimit" class="gpn-input" type="number" value="0"></div>' +
+      '</div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Valid From</label><input id="cpFrom" class="gpn-input" type="date" value="' + GPN.todayISO() + '"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Valid Until</label><input id="cpUntil" class="gpn-input" type="date"></div>' +
+      '</div>' +
+      '<div class="gpn-field"><label class="gpn-label">Notes</label><input id="cpNotes" class="gpn-input"></div>' +
+      '<div id="cpErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="cpCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-cyan" id="cpSave">Create</button>' +
+      '</div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('cpCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('cpSave'), 'click', function () {
+        var err = GPN.byId('cpErr'); err.hidden = true;
+        var payload = {
+          Code:       GPN.byId('cpCode').value.trim().toUpperCase(),
+          Type:       GPN.byId('cpType').value,
+          Value:      GPN.byId('cpValue').value,
+          MinOrder:   GPN.byId('cpMin').value,
+          UsageLimit: GPN.byId('cpLimit').value,
+          ValidFrom:  GPN.byId('cpFrom').value,
+          ValidUntil: GPN.byId('cpUntil').value,
+          Notes:      GPN.byId('cpNotes').value.trim()
+        };
+        if (!payload.Code) { err.textContent = 'Code required.'; err.hidden = false; return; }
+        if (!payload.Value || Number(payload.Value) <= 0) { err.textContent = 'Value must be positive.'; err.hidden = false; return; }
+        var btn = GPN.byId('cpSave');
+        GPN.setLoading(btn, true, 'Creating…');
+        GPN.api('adminEstoreCouponCreate', payload).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Coupon created.'); closeModal(); render('coupons');
+        });
+      });
+    });
+  }
+
+  /* ============================================================
+     REFERRALS
+     ============================================================ */
+  VIEWS.referrals = function () {
+    return GPN.api('adminEstoreReferralList').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var rows = (j.data && j.data.referrals) || [];
+
+      var html = '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h3 class="gpn-card-title">Referrals (' + rows.length + ')</h3>' +
+          '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddRef">+ Add</button>' +
+        '</div>';
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No referral codes yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Code</th><th>Referrer</th><th>Reward</th><th>Used</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+        rows.forEach(function (r) {
+          var rewardText = String(r.RewardType).toUpperCase() === 'PERCENT' ? r.RewardValue + '%' : fmtCur(r.RewardValue);
+          html += '<tr>' +
+            '<td data-label="Code" class="gpn-mono">' + esc(r.ReferrerCode) + '</td>' +
+            '<td data-label="Referrer">' + esc(r.ReferrerName) + '</td>' +
+            '<td data-label="Reward">' + esc(rewardText) + '</td>' +
+            '<td data-label="Used">' + esc(r.UsedCount || 0) + '</td>' +
+            '<td data-label="Status">' + pill(r.Status || '') + '</td>' +
+            '<td data-label="Actions">' +
+              '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-toggle="' + esc(r.ReferralID) + '" data-status="' + esc(r.Status || '') + '">' + (String(r.Status).toUpperCase() === 'ACTIVE' ? 'Deactivate' : 'Activate') + '</button> ' +
+              '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-del="' + esc(r.ReferralID) + '">Delete</button>' +
+            '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddRef'), 'click', addReferralModal);
+      GPN.$$('button[data-toggle]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          var next = String(b.dataset.status).toUpperCase() === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+          GPN.api('adminEstoreReferralUpdate', { id: b.dataset.toggle, patch: { Status: next } }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Updated.'); render('referrals');
+          });
+        });
+      });
+      GPN.$$('button[data-del]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          if (!confirm('Delete referral?')) return;
+          GPN.api('adminEstoreReferralDelete', { id: b.dataset.del }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Deleted.'); render('referrals');
+          });
+        });
+      });
+    });
+  };
+
+  function addReferralModal() {
+    var html =
+      '<h3 class="gpn-modal-title">Add Referral</h3>' +
+      '<div class="gpn-field"><label class="gpn-label">Referrer Name</label><input id="rfName" class="gpn-input"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Referral Code</label><input id="rfCode" class="gpn-input" placeholder="ARNAV10" autocapitalize="characters"></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Reward Type</label><select id="rfType" class="gpn-select"><option>FIXED</option><option>PERCENT</option></select></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Reward Value</label><input id="rfValue" class="gpn-input" type="number"></div>' +
+      '</div>' +
+      '<div class="gpn-field"><label class="gpn-label">Notes</label><input id="rfNotes" class="gpn-input"></div>' +
+      '<div id="rfErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="rfCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-cyan" id="rfSave">Create</button>' +
+      '</div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('rfCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('rfSave'), 'click', function () {
+        var err = GPN.byId('rfErr'); err.hidden = true;
+        var payload = {
+          ReferrerName: GPN.byId('rfName').value.trim(),
+          ReferrerCode: GPN.byId('rfCode').value.trim().toUpperCase(),
+          RewardType:   GPN.byId('rfType').value,
+          RewardValue:  GPN.byId('rfValue').value,
+          Notes:        GPN.byId('rfNotes').value.trim()
+        };
+        if (!payload.ReferrerName || !payload.ReferrerCode) { err.textContent = 'Name and Code required.'; err.hidden = false; return; }
+        var btn = GPN.byId('rfSave');
+        GPN.setLoading(btn, true, 'Creating…');
+        GPN.api('adminEstoreReferralCreate', payload).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Referral created.'); closeModal(); render('referrals');
+        });
+      });
+    });
+  }
+
+})();
+</script>
+</body>
+</html>
