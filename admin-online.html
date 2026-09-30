@@ -1,1 +1,1618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Online Management — GPN Admin</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body>
 
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">Online <b>Management</b></div>
+    </div>
+    <div class="gpn-topbar-user">
+      <span class="gpn-user-badge" id="userBadge">—</span>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnLogout" type="button">Logout</button>
+    </div>
+  </header>
+
+  <nav class="gpn-navstrip">
+    <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
+    <a class="gpn-navstrip-btn active" href="admin-online.html">Online</a>
+    <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
+    <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
+    <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
+    <a class="gpn-navstrip-btn" href="admin-settings.html">Settings</a>
+  </nav>
+
+  <main class="gpn-main">
+
+    <!-- Sub-tabs (chips) -->
+    <div class="gpn-chips" id="subTabs">
+      <button class="gpn-chip active" data-view="overview">Overview</button>
+      <button class="gpn-chip" data-view="students">Students</button>
+      <button class="gpn-chip" data-view="programmes">Programmes</button>
+      <button class="gpn-chip" data-view="subjects">Subjects</button>
+      <button class="gpn-chip" data-view="chapters">Chapters</button>
+      <button class="gpn-chip" data-view="enrolments">Enrolments</button>
+      <button class="gpn-chip" data-view="materials">Materials</button>
+      <button class="gpn-chip" data-view="schedule">Schedule</button>
+      <button class="gpn-chip" data-view="tests">Tests</button>
+      <button class="gpn-chip" data-view="evaluations">Evaluations</button>
+      <button class="gpn-chip" data-view="results">Results</button>
+      <button class="gpn-chip" data-view="payments">Payments</button>
+      <button class="gpn-chip" data-view="content">Content</button>
+    </div>
+
+    <div id="viewRoot">
+      <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ============================================================ MODALS ============================================================ -->
+
+<div class="gpn-modal" id="modalGeneric" hidden>
+  <div class="gpn-modal-card" id="modalGenericCard"></div>
+</div>
+
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  if (!GPN.Guard.requireAdmin()) return;
+
+  var viewRoot = null;
+  var appRoot  = null;
+
+  /* ==========================================================
+     BOOT
+     ========================================================== */
+  GPN.ready(function () {
+    appRoot  = GPN.byId('appRoot');
+    viewRoot = GPN.byId('viewRoot');
+
+    GPN.byId('userBadge').textContent = GPN.Session.getName() || 'Admin';
+    GPN.byId('userBadge').title = GPN.Session.getUser() || '';
+
+    /* Sub-tab nav */
+    GPN.$$('#subTabs .gpn-chip').forEach(function (btn) {
+      GPN.on(btn, 'click', function () {
+        GPN.$$('#subTabs .gpn-chip').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        render(btn.dataset.view);
+      });
+    });
+
+    GPN.on(GPN.byId('btnLogout'), 'click', function () {
+      if (confirm('Sign out?')) GPN.Guard.logout();
+    });
+
+    /* Modal wire */
+    GPN.Modal.wire('modalGeneric');
+
+    /* Reveal */
+    appRoot.hidden = false;
+    GPN.byId('pageLoading').hidden = true;
+
+    /* Default view */
+    render('overview');
+  });
+
+  function render(view) {
+    GPN.showContainerLoading(viewRoot, 'Loading…');
+    var fn = VIEWS[view] || VIEWS.overview;
+    Promise.resolve(fn()).catch(function (err) {
+      console.error(view, err);
+      GPN.showContainerError(viewRoot, 'Failed to load.');
+    });
+  }
+
+  /* Open a modal with given HTML body and optional setup callback */
+  function openModal(html, onReady) {
+    var card = GPN.byId('modalGenericCard');
+    card.innerHTML = html;
+    GPN.Modal.open('modalGeneric');
+    if (typeof onReady === 'function') setTimeout(onReady, 20);
+  }
+  function closeModal() { GPN.Modal.close('modalGeneric'); }
+
+  /* Common data caches */
+  var cacheProgrammes = null;
+  var cacheSubjects = null;
+  var cacheChapters = null;
+
+  function loadProgrammes(force) {
+    if (cacheProgrammes && !force) return Promise.resolve(cacheProgrammes);
+    return GPN.api('adminListProgrammes').then(function (j) {
+      cacheProgrammes = (j.ok && j.data && j.data.programmes) || [];
+      return cacheProgrammes;
+    });
+  }
+  function loadSubjects(force) {
+    if (cacheSubjects && !force) return Promise.resolve(cacheSubjects);
+    return GPN.api('adminListSubjects').then(function (j) {
+      cacheSubjects = (j.ok && j.data && j.data.subjects) || [];
+      return cacheSubjects;
+    });
+  }
+  function loadChapters(force) {
+    if (cacheChapters && !force) return Promise.resolve(cacheChapters);
+    return GPN.api('adminListChapters').then(function (j) {
+      cacheChapters = (j.ok && j.data && j.data.chapters) || [];
+      return cacheChapters;
+    });
+  }
+  function invalidateCaches() {
+    cacheProgrammes = null; cacheSubjects = null; cacheChapters = null;
+  }
+
+  /* Shortcut render helpers */
+  function esc(s) { return GPN.esc(s); }
+  function fmtDate(d) { return GPN.formatDate(d); }
+  function fmtDT(d) { return GPN.formatDateTime(d); }
+  function fmtCur(n) { return GPN.formatCurrency(n); }
+  function pill(text, tone) {
+    var cls = tone || String(text || '').toLowerCase().replace(/[^a-z]/g, '');
+    return '<span class="gpn-pill ' + esc(cls) + '">' + esc(text) + '</span>';
+  }
+  function optRow(name, id) { return { value: id, label: name + ' (' + id + ')' }; }
+
+  var VIEWS = {};
+
+  /* ============================================================
+     VIEW: OVERVIEW
+     ============================================================ */
+  VIEWS.overview = function () {
+    return GPN.api('adminOnlineOverview').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var d = j.data || {};
+      viewRoot.innerHTML =
+        '<div class="gpn-stats">' +
+          statCard('Total Students', d.totalStudents || 0) +
+          statCard('Active', d.activeStudents || 0, 'green') +
+          statCard('Suspended', d.suspendedStudents || 0, 'error') +
+          statCard('Active Programmes', d.activeProgrammes || 0, 'gold') +
+          statCard('Tests Today', d.testsToday || 0) +
+          statCard('Tests This Week', d.testsThisWeek || 0) +
+          statCard('Pending Evals', d.pendingEvaluations || 0, 'warn') +
+          statCard('Pending Publishes', d.pendingPublications || 0, 'warn') +
+          statCard('Total Wallet', fmtCur(d.totalWalletBalance || 0), 'gold') +
+        '</div>' +
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Quick Actions</h3></div>' +
+        '<div class="gpn-card-body"><div class="gpn-row">' +
+          '<button class="gpn-btn gpn-btn-cyan" onclick="document.querySelector(\'#subTabs button[data-view=students]\').click()">+ Add Student</button>' +
+          '<button class="gpn-btn gpn-btn-cyan" onclick="document.querySelector(\'#subTabs button[data-view=tests]\').click()">+ Create Test</button>' +
+          '<button class="gpn-btn gpn-btn-cyan" onclick="document.querySelector(\'#subTabs button[data-view=payments]\').click()">+ Record Payment</button>' +
+        '</div></div></div>';
+    });
+  };
+  function statCard(label, value, tone) {
+    return '<div class="gpn-stat"><span class="gpn-stat-label">' + esc(label) + '</span><span class="gpn-stat-value ' + (tone || '') + '">' + esc(String(value)) + '</span></div>';
+  }
+
+  /* ============================================================
+     VIEW: STUDENTS
+     ============================================================ */
+  VIEWS.students = function () {
+    return GPN.api('adminListStudents').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var rows = (j.data && j.data.students) || [];
+
+      var html = '';
+      html += '<div class="gpn-card"><div class="gpn-card-head">';
+      html += '<h3 class="gpn-card-title">Students (' + rows.length + ')</h3>';
+      html += '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddStudent">+ Add Student</button>';
+      html += '</div><div class="gpn-card-body">';
+      html += '<input class="gpn-search" id="studentSearch" placeholder="Search by name, ID, phone…" style="margin-bottom:12px;">';
+      html += '</div>';
+
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No students yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;">';
+        html += '<table class="gpn-table"><thead><tr><th>ID</th><th>Name</th><th>Class</th><th>Phone</th><th>Wallet</th><th>Access</th><th>Status</th><th></th></tr></thead><tbody id="studentRows">';
+        rows.forEach(function (s) {
+          html += studentRow(s);
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddStudent'), 'click', addStudentModal);
+
+      var search = GPN.byId('studentSearch');
+      if (search) {
+        GPN.on(search, 'input', GPN.debounce(function () {
+          var q = search.value.toLowerCase().trim();
+          GPN.$$('#studentRows tr').forEach(function (tr) {
+            var hay = (tr.dataset.search || '').toLowerCase();
+            tr.style.display = (!q || hay.indexOf(q) >= 0) ? '' : 'none';
+          });
+        }, 150));
+      }
+
+      GPN.$$('#studentRows button[data-act]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () {
+          var id = btn.dataset.id;
+          var act = btn.dataset.act;
+          if (act === 'view')     viewStudent(id);
+          if (act === 'wallet')   walletModal(id);
+          if (act === 'edit')     editStudentModal(id);
+          if (act === 'password') resetPasswordModal(id);
+          if (act === 'delete')   deleteStudent(id);
+        });
+      });
+    });
+  };
+
+  function studentRow(s) {
+    var search = [s.Name, s.StudentID, s.Phone, s.Email].join(' ').toLowerCase();
+    return '<tr data-search="' + esc(search) + '">' +
+      '<td data-label="ID" class="gpn-mono">' + esc(s.StudentID) + '</td>' +
+      '<td data-label="Name">' + esc(s.Name) + '</td>' +
+      '<td data-label="Class">' + esc(s.Class || '—') + '</td>' +
+      '<td data-label="Phone">' + esc(s.Phone || '—') + '</td>' +
+      '<td data-label="Wallet" style="color:var(--gold);font-weight:700;">' + fmtCur(s.Wallet || 0) + '</td>' +
+      '<td data-label="Access">' + pill(s.Access || 'NONE') + '</td>' +
+      '<td data-label="Status">' + pill(s.Status || '—') + '</td>' +
+      '<td data-label="Actions">' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="view" data-id="' + esc(s.StudentID) + '">View</button> ' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="wallet" data-id="' + esc(s.StudentID) + '">Wallet</button> ' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="edit" data-id="' + esc(s.StudentID) + '">Edit</button> ' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="password" data-id="' + esc(s.StudentID) + '">Reset PW</button> ' +
+        '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-act="delete" data-id="' + esc(s.StudentID) + '">Delete</button>' +
+      '</td>' +
+    '</tr>';
+  }
+
+  function addStudentModal() {
+    var html =
+      '<h3 class="gpn-modal-title">Add Online Student</h3>' +
+      '<p class="gpn-modal-sub">ID format: ol-&lt;firstname&gt;&lt;serial&gt; (e.g. ol-arnav042)</p>' +
+      '<div class="gpn-field"><label class="gpn-label">Student ID</label><input id="nsId" class="gpn-input" placeholder="ol-arnav042"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Name</label><input id="nsName" class="gpn-input"></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Class</label>' + classSelect('nsClass') + '</div>' +
+        '<div class="gpn-field"><label class="gpn-label">Board</label>' + boardSelect('nsBoard') + '</div>' +
+      '</div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Phone</label><input id="nsPhone" class="gpn-input" inputmode="tel"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">WhatsApp</label><input id="nsWa" class="gpn-input" inputmode="tel" placeholder="Defaults to phone"></div>' +
+      '</div>' +
+      '<div class="gpn-field"><label class="gpn-label">Email</label><input id="nsEmail" class="gpn-input" inputmode="email"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">School</label><input id="nsSchool" class="gpn-input"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Parent Name</label><input id="nsParent" class="gpn-input"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Password (min 10)</label><input id="nsPass" class="gpn-input" type="password"></div>' +
+      '<div id="nsError" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="nsCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-cyan" id="nsSave">Create</button>' +
+      '</div>';
+
+    openModal(html, function () {
+      GPN.on(GPN.byId('nsCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('nsSave'), 'click', function () {
+        var err = GPN.byId('nsError');
+        err.hidden = true;
+
+        var payload = {
+          StudentID: GPN.byId('nsId').value.trim().toLowerCase(),
+          Name: GPN.byId('nsName').value.trim(),
+          Class: GPN.byId('nsClass').value,
+          Board: GPN.byId('nsBoard').value,
+          Phone: GPN.byId('nsPhone').value.trim(),
+          WhatsApp: GPN.byId('nsWa').value.trim(),
+          Email: GPN.byId('nsEmail').value.trim(),
+          School: GPN.byId('nsSchool').value.trim(),
+          ParentName: GPN.byId('nsParent').value.trim(),
+          Password: GPN.byId('nsPass').value
+        };
+
+        if (!payload.StudentID || !payload.Name || !payload.Password) {
+          err.textContent = 'ID, Name, Password required.';
+          err.hidden = false;
+          return;
+        }
+        if (!/^ol-[a-z0-9]{2,20}$/.test(payload.StudentID)) {
+          err.textContent = 'ID must be ol-<firstname><serial>.';
+          err.hidden = false;
+          return;
+        }
+
+        var btn = GPN.byId('nsSave');
+        GPN.setLoading(btn, true, 'Creating…');
+        GPN.api('adminCreateStudent', payload).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Student created.');
+          closeModal();
+          render('students');
+        });
+      });
+    });
+  }
+
+  function editStudentModal(id) {
+    GPN.api('adminGetStudent', { id: id }).then(function (j) {
+      if (!j.ok || !j.data || !j.data.student) { GPN.Toast.error('Student not found.'); return; }
+      var s = j.data.student;
+
+      var html =
+        '<h3 class="gpn-modal-title">Edit ' + esc(s.Name) + '</h3>' +
+        '<div class="gpn-field"><label class="gpn-label">Name</label><input id="esName" class="gpn-input" value="' + esc(s.Name) + '"></div>' +
+        '<div class="gpn-grid-2">' +
+          '<div class="gpn-field"><label class="gpn-label">Class</label>' + classSelect('esClass', s.Class) + '</div>' +
+          '<div class="gpn-field"><label class="gpn-label">Board</label>' + boardSelect('esBoard', s.Board) + '</div>' +
+        '</div>' +
+        '<div class="gpn-grid-2">' +
+          '<div class="gpn-field"><label class="gpn-label">Phone</label><input id="esPhone" class="gpn-input" value="' + esc(s.Phone || '') + '"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">WhatsApp</label><input id="esWa" class="gpn-input" value="' + esc(s.WhatsApp || '') + '"></div>' +
+        '</div>' +
+        '<div class="gpn-field"><label class="gpn-label">Email</label><input id="esEmail" class="gpn-input" value="' + esc(s.Email || '') + '"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">School</label><input id="esSchool" class="gpn-input" value="' + esc(s.School || '') + '"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Parent Name</label><input id="esParent" class="gpn-input" value="' + esc(s.ParentName || '') + '"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Status</label>' +
+          '<select id="esStatus" class="gpn-select">' +
+            ['ACTIVE','SUSPENDED','INACTIVE'].map(function (x) {
+              return '<option value="' + x + '"' + (String(s.Status).toUpperCase() === x ? ' selected' : '') + '>' + x + '</option>';
+            }).join('') +
+          '</select></div>' +
+        '<div id="esError" class="gpn-alert gpn-alert-error" hidden></div>' +
+        '<div class="gpn-modal-actions">' +
+          '<button class="gpn-btn gpn-btn-ghost" id="esCancel">Cancel</button>' +
+          '<button class="gpn-btn gpn-btn-cyan" id="esSave">Save</button>' +
+        '</div>';
+
+      openModal(html, function () {
+        GPN.on(GPN.byId('esCancel'), 'click', closeModal);
+        GPN.on(GPN.byId('esSave'), 'click', function () {
+          var err = GPN.byId('esError');
+          err.hidden = true;
+          var patch = {
+            Name: GPN.byId('esName').value.trim(),
+            Class: GPN.byId('esClass').value,
+            Board: GPN.byId('esBoard').value,
+            Phone: GPN.byId('esPhone').value.trim(),
+            WhatsApp: GPN.byId('esWa').value.trim(),
+            Email: GPN.byId('esEmail').value.trim(),
+            School: GPN.byId('esSchool').value.trim(),
+            ParentName: GPN.byId('esParent').value.trim(),
+            Status: GPN.byId('esStatus').value
+          };
+          var btn = GPN.byId('esSave');
+          GPN.setLoading(btn, true, 'Saving…');
+          GPN.api('adminUpdateStudent', { id: id, patch: patch }).then(function (r) {
+            GPN.setLoading(btn, false);
+            if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+            GPN.Toast.ok('Student updated.');
+            closeModal(); render('students');
+          });
+        });
+      });
+    });
+  }
+
+  function resetPasswordModal(id) {
+    var html =
+      '<h3 class="gpn-modal-title">Reset Password</h3>' +
+      '<p class="gpn-modal-sub">Student sessions will be revoked. They must log in with the new password.</p>' +
+      '<div class="gpn-field"><label class="gpn-label">New Password (min 10)</label><input id="rpNew" class="gpn-input" type="password"></div>' +
+      '<div id="rpError" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="rpCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-danger" id="rpSave">Reset</button>' +
+      '</div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('rpCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('rpSave'), 'click', function () {
+        var err = GPN.byId('rpError');
+        var pw = GPN.byId('rpNew').value;
+        if (pw.length < 10) { err.textContent = 'Min 10 characters.'; err.hidden = false; return; }
+        var btn = GPN.byId('rpSave');
+        GPN.setLoading(btn, true, 'Resetting…');
+        GPN.api('adminResetPassword', { id: id, password: pw }).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Password reset. Sessions revoked: ' + ((r.data && r.data.sessionsRevoked) || 0));
+          closeModal();
+        });
+      });
+    });
+  }
+
+  function deleteStudent(id) {
+    if (!confirm('Delete ' + id + '? This soft-deletes (Status = DELETED).')) return;
+    GPN.api('adminDeleteStudent', { id: id }).then(function (r) {
+      if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+      GPN.Toast.ok('Student deleted.');
+      render('students');
+    });
+  }
+
+  function viewStudent(id) {
+    GPN.api('adminGetStudent', { id: id }).then(function (j) {
+      if (!j.ok) { GPN.Toast.error(GPN.friendlyError(j)); return; }
+      var d = j.data;
+      var s = d.student || {};
+      var w = d.wallet || {};
+
+      var html =
+        '<h3 class="gpn-modal-title">' + esc(s.Name || id) + '</h3>' +
+        '<p class="gpn-modal-sub">' + esc(s.StudentID) + ' · ' + esc(s.Class || '') + ' · ' + pill(s.Status) + '</p>' +
+        '<div class="gpn-card"><div class="gpn-card-body">' +
+          '<div class="gpn-row-between" style="margin-bottom:6px;"><span class="gpn-quiet">Phone</span><span>' + esc(s.Phone || '—') + '</span></div>' +
+          '<div class="gpn-row-between" style="margin-bottom:6px;"><span class="gpn-quiet">Email</span><span>' + esc(s.Email || '—') + '</span></div>' +
+          '<div class="gpn-row-between" style="margin-bottom:6px;"><span class="gpn-quiet">Wallet</span><span style="color:var(--gold);font-weight:700;">' + fmtCur(w.balance || 0) + '</span></div>' +
+          '<div class="gpn-row-between" style="margin-bottom:6px;"><span class="gpn-quiet">Enrolments</span><span>' + (d.enrolments || []).length + '</span></div>' +
+          '<div class="gpn-row-between" style="margin-bottom:6px;"><span class="gpn-quiet">Results</span><span>' + (d.results || []).length + '</span></div>' +
+          '<div class="gpn-row-between"><span class="gpn-quiet">Payments</span><span>' + (d.payments || []).length + '</span></div>' +
+        '</div></div>' +
+        '<div class="gpn-modal-actions">' +
+          '<button class="gpn-btn gpn-btn-ghost" id="vsClose">Close</button>' +
+        '</div>';
+      openModal(html, function () {
+        GPN.on(GPN.byId('vsClose'), 'click', closeModal);
+      });
+    });
+  }
+
+  function walletModal(id) {
+    GPN.api('adminGetStudent', { id: id }).then(function (j) {
+      if (!j.ok) { GPN.Toast.error('Failed to load.'); return; }
+      var s = j.data.student || {};
+      var w = j.data.wallet || { balance: 0, history: [] };
+
+      var hist = w.history || [];
+      var html =
+        '<h3 class="gpn-modal-title">Wallet — ' + esc(s.Name || id) + '</h3>' +
+        '<p class="gpn-modal-sub">Balance: <b style="color:var(--gold)">' + fmtCur(w.balance || 0) + '</b></p>' +
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Add Money / Payment</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div class="gpn-field"><label class="gpn-label">Amount</label><input id="wAmt" class="gpn-input" type="number" inputmode="numeric"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Method</label>' +
+            '<select id="wMethod" class="gpn-select">' + ['UPI','NEFT','Cash','Card','Other'].map(function(m){return '<option>'+m+'</option>';}).join('') + '</select>' +
+          '</div>' +
+          '<div class="gpn-field"><label class="gpn-label">Reference / Notes</label><input id="wRef" class="gpn-input"></div>' +
+          '<div class="gpn-row"><button class="gpn-btn gpn-btn-primary" id="wCredit">+ Credit</button>' +
+          '<button class="gpn-btn gpn-btn-danger" id="wRefund">Refund</button>' +
+          '<button class="gpn-btn gpn-btn-ghost" id="wSettle">Settle</button></div>' +
+        '</div></div>' +
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">History (' + hist.length + ')</h3></div>';
+      if (!hist.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No transactions.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Balance</th></tr></thead><tbody>';
+        hist.slice(0, 20).forEach(function (h) {
+          var amt = Number(h.Amount || 0);
+          html += '<tr>' +
+            '<td data-label="Date">' + esc(GPN.formatDateTime(h.EntryDate)) + '</td>' +
+            '<td data-label="Type">' + pill(h.Type || '') + '</td>' +
+            '<td data-label="Amount" style="color:' + (amt >= 0 ? 'var(--success)' : 'var(--error)') + ';font-weight:700;">' + (amt >= 0 ? '+' : '') + fmtCur(amt) + '</td>' +
+            '<td data-label="Balance">' + fmtCur(h.BalanceAfter || 0) + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>' +
+        '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="wClose">Close</button></div>';
+
+      openModal(html, function () {
+        GPN.on(GPN.byId('wClose'), 'click', closeModal);
+        GPN.on(GPN.byId('wCredit'), 'click', function () {
+          var amt = Number(GPN.byId('wAmt').value);
+          if (!amt || amt <= 0) { GPN.Toast.error('Enter amount.'); return; }
+          var btn = GPN.byId('wCredit');
+          GPN.setLoading(btn, true, 'Adding…');
+          GPN.api('adminCreatePayment', {
+            StudentID: id, Amount: amt,
+            Method: GPN.byId('wMethod').value,
+            Reference: GPN.byId('wRef').value
+          }).then(function (r) {
+            GPN.setLoading(btn, false);
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Credited.');
+            walletModal(id);
+          });
+        });
+        GPN.on(GPN.byId('wRefund'), 'click', function () {
+          var amt = Number(GPN.byId('wAmt').value);
+          if (!amt || amt <= 0) { GPN.Toast.error('Enter amount.'); return; }
+          GPN.api('adminWalletRefund', { studentId: id, amount: amt, notes: GPN.byId('wRef').value }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Refunded.'); walletModal(id);
+          });
+        });
+        GPN.on(GPN.byId('wSettle'), 'click', function () {
+          if (!confirm('Settle full balance to ₹0?')) return;
+          GPN.api('adminWalletSettle', { studentId: id, notes: GPN.byId('wRef').value }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Settled.'); walletModal(id);
+          });
+        });
+      });
+    });
+  }
+
+  /* ============================================================
+     VIEW: PROGRAMMES
+     ============================================================ */
+  VIEWS.programmes = function () {
+    return loadProgrammes(true).then(function (progs) {
+      var html = '';
+      html += '<div class="gpn-card"><div class="gpn-card-head">';
+      html += '<h3 class="gpn-card-title">Programmes (' + progs.length + ')</h3>';
+      html += '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddProgramme">+ Add</button>';
+      html += '</div>';
+      if (!progs.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No programmes yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>ID</th><th>Name</th><th>Class</th><th>Weeks</th><th>Tests/Wk</th><th>Subjects</th><th>Total ₹</th><th>Status</th><th></th></tr></thead><tbody>';
+        progs.forEach(function (p) {
+          html += '<tr>' +
+            '<td data-label="ID" class="gpn-mono">' + esc(p.ProgrammeID) + '</td>' +
+            '<td data-label="Name">' + esc(p.Name) + '</td>' +
+            '<td data-label="Class">' + esc(p.Class || '—') + '</td>' +
+            '<td data-label="Weeks">' + esc(p.NumWeeks || 0) + '</td>' +
+            '<td data-label="Tests/Wk">' + esc(p.TestsPerWeek || 0) + '</td>' +
+            '<td data-label="Subjects">' + (p.Subjects || []).length + '</td>' +
+            '<td data-label="Total ₹">' + fmtCur(p.TotalPrice || 0) + '</td>' +
+            '<td data-label="Status">' + pill(p.Status || '') + '</td>' +
+            '<td data-label="Actions"><button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-prog="' + esc(p.ProgrammeID) + '">Manage</button></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddProgramme'), 'click', addProgrammeModal);
+      GPN.$$('button[data-prog]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () { manageProgramme(btn.dataset.prog); });
+      });
+    });
+  };
+
+  function addProgrammeModal() {
+    var html =
+      '<h3 class="gpn-modal-title">Add Programme</h3>' +
+      '<div class="gpn-field"><label class="gpn-label">Name</label><input id="prName" class="gpn-input"></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Class</label>' + classSelect('prClass') + '</div>' +
+        '<div class="gpn-field"><label class="gpn-label">Board</label>' + boardSelect('prBoard') + '</div>' +
+      '</div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Num Weeks</label><input id="prWeeks" class="gpn-input" type="number"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Tests / Week</label><input id="prTPW" class="gpn-input" type="number" value="0"></div>' +
+      '</div>' +
+      '<div class="gpn-field"><label class="gpn-label">Description</label><textarea id="prDesc" class="gpn-textarea"></textarea></div>' +
+      '<div id="prError" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="prCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="prSave">Create</button></div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('prCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('prSave'), 'click', function () {
+        var err = GPN.byId('prError');
+        var payload = {
+          Name: GPN.byId('prName').value.trim(),
+          Class: GPN.byId('prClass').value,
+          Board: GPN.byId('prBoard').value,
+          NumWeeks: GPN.byId('prWeeks').value,
+          TestsPerWeek: GPN.byId('prTPW').value,
+          Description: GPN.byId('prDesc').value
+        };
+        if (!payload.Name) { err.textContent = 'Name required.'; err.hidden = false; return; }
+        var btn = GPN.byId('prSave');
+        GPN.setLoading(btn, true, 'Creating…');
+        GPN.api('adminCreateProgramme', payload).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Programme created.');
+          invalidateCaches();
+          closeModal(); render('programmes');
+        });
+      });
+    });
+  }
+
+  function manageProgramme(pid) {
+    Promise.all([loadProgrammes(true), loadSubjects()]).then(function (res) {
+      var progs = res[0], subjects = res[1];
+      var p = progs.filter(function (x) { return String(x.ProgrammeID) === String(pid); })[0];
+      if (!p) { GPN.Toast.error('Not found.'); return; }
+      var linked = (p.Subjects || []).map(function (s) { return String(s.SubjectID); });
+      var available = subjects.filter(function (s) { return linked.indexOf(String(s.SubjectID)) < 0; });
+
+      var html =
+        '<h3 class="gpn-modal-title">' + esc(p.Name) + '</h3>' +
+        '<p class="gpn-modal-sub">' + p.NumWeeks + ' weeks · ' + p.TestsPerWeek + ' tests/week · ₹' + (p.TotalPrice || 0) + ' total</p>' +
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Attached Subjects (' + (p.Subjects || []).length + ')</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div class="gpn-field"><label class="gpn-label">Add Subject</label>' +
+            '<select id="mpSubject" class="gpn-select"><option value="">— Select —</option>' + available.map(function (s) { return '<option value="' + esc(s.SubjectID) + '">' + esc(s.Name) + '</option>'; }).join('') + '</select>' +
+          '</div>' +
+          '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" id="mpAdd">Add</button>' +
+          '<div style="margin-top:12px;">' +
+            (p.Subjects || []).map(function (s) {
+              return '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span>' + esc(s.Name) + '</span><button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-rem="' + esc(s.SubjectID) + '">Remove</button></div>';
+            }).join('') || '<div class="gpn-quiet">No subjects attached.</div>' +
+          '</div>' +
+        '</div></div>' +
+        '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="mpClose">Close</button></div>';
+
+      openModal(html, function () {
+        GPN.on(GPN.byId('mpClose'), 'click', closeModal);
+        GPN.on(GPN.byId('mpAdd'), 'click', function () {
+          var sid = GPN.byId('mpSubject').value;
+          if (!sid) return;
+          GPN.api('adminAddProgrammeSubject', { programmeId: pid, subjectId: sid }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            invalidateCaches(); manageProgramme(pid);
+          });
+        });
+        GPN.$$('button[data-rem]').forEach(function (btn) {
+          GPN.on(btn, 'click', function () {
+            GPN.api('adminRemoveProgrammeSubject', { programmeId: pid, subjectId: btn.dataset.rem }).then(function (r) {
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              invalidateCaches(); manageProgramme(pid);
+            });
+          });
+        });
+      });
+    });
+  }
+
+  /* ============================================================
+     VIEW: SUBJECTS
+     ============================================================ */
+  VIEWS.subjects = function () {
+    return loadSubjects(true).then(function (subs) {
+      var html =
+        '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Subjects (' + subs.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddSubject">+ Add</button>' +
+        '</div>';
+      if (!subs.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No subjects yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>ID</th><th>Name</th><th>Class</th><th>Board</th><th>Status</th></tr></thead><tbody>';
+        subs.forEach(function (s) {
+          html += '<tr>' +
+            '<td data-label="ID" class="gpn-mono">' + esc(s.SubjectID) + '</td>' +
+            '<td data-label="Name">' + esc(s.Name) + '</td>' +
+            '<td data-label="Class">' + esc(s.Class || '—') + '</td>' +
+            '<td data-label="Board">' + esc(s.Board || '—') + '</td>' +
+            '<td data-label="Status">' + pill(s.Status || '') + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddSubject'), 'click', function () {
+        var m =
+          '<h3 class="gpn-modal-title">Add Subject</h3>' +
+          '<div class="gpn-field"><label class="gpn-label">Name</label><input id="sbName" class="gpn-input"></div>' +
+          '<div class="gpn-grid-2">' +
+            '<div class="gpn-field"><label class="gpn-label">Class</label>' + classSelect('sbClass') + '</div>' +
+            '<div class="gpn-field"><label class="gpn-label">Board</label>' + boardSelect('sbBoard') + '</div>' +
+          '</div>' +
+          '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="sbCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="sbSave">Create</button></div>';
+        openModal(m, function () {
+          GPN.on(GPN.byId('sbCancel'), 'click', closeModal);
+          GPN.on(GPN.byId('sbSave'), 'click', function () {
+            var payload = { Name: GPN.byId('sbName').value.trim(), Class: GPN.byId('sbClass').value, Board: GPN.byId('sbBoard').value };
+            if (!payload.Name) { GPN.Toast.error('Name required.'); return; }
+            var btn = GPN.byId('sbSave');
+            GPN.setLoading(btn, true, 'Creating…');
+            GPN.api('adminCreateSubject', payload).then(function (r) {
+              GPN.setLoading(btn, false);
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              GPN.Toast.ok('Subject created.'); invalidateCaches(); closeModal(); render('subjects');
+            });
+          });
+        });
+      });
+    });
+  };
+
+  /* ============================================================
+     VIEW: CHAPTERS
+     ============================================================ */
+  VIEWS.chapters = function () {
+    return Promise.all([loadChapters(true), loadSubjects()]).then(function (res) {
+      var chapters = res[0], subjects = res[1];
+      var subMap = {}; subjects.forEach(function (s) { subMap[s.SubjectID] = s.Name; });
+
+      var html =
+        '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Chapters (' + chapters.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddChapter">+ Add</button>' +
+        '</div>';
+      if (!chapters.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No chapters yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>ID</th><th>Subject</th><th>Name</th><th>No.</th><th>Status</th></tr></thead><tbody>';
+        chapters.forEach(function (c) {
+          html += '<tr>' +
+            '<td data-label="ID" class="gpn-mono">' + esc(c.ChapterID) + '</td>' +
+            '<td data-label="Subject">' + esc(subMap[c.SubjectID] || c.SubjectID) + '</td>' +
+            '<td data-label="Name">' + esc(c.Name) + '</td>' +
+            '<td data-label="No.">' + esc(c.Number || '—') + '</td>' +
+            '<td data-label="Status">' + pill(c.Status || '') + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddChapter'), 'click', function () {
+        var opts = '<option value="">— Select Subject —</option>' + subjects.map(function (s) { return '<option value="' + esc(s.SubjectID) + '">' + esc(s.Name) + '</option>'; }).join('');
+        var m =
+          '<h3 class="gpn-modal-title">Add Chapter</h3>' +
+          '<div class="gpn-field"><label class="gpn-label">Subject</label><select id="chSub" class="gpn-select">' + opts + '</select></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Name</label><input id="chName" class="gpn-input"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Number</label><input id="chNo" class="gpn-input"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Description</label><textarea id="chDesc" class="gpn-textarea"></textarea></div>' +
+          '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="chCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="chSave">Create</button></div>';
+        openModal(m, function () {
+          GPN.on(GPN.byId('chCancel'), 'click', closeModal);
+          GPN.on(GPN.byId('chSave'), 'click', function () {
+            var payload = { SubjectID: GPN.byId('chSub').value, Name: GPN.byId('chName').value.trim(), Number: GPN.byId('chNo').value.trim(), Description: GPN.byId('chDesc').value };
+            if (!payload.SubjectID || !payload.Name) { GPN.Toast.error('Subject and Name required.'); return; }
+            GPN.api('adminCreateChapter', payload).then(function (r) {
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              GPN.Toast.ok('Chapter created.'); invalidateCaches(); closeModal(); render('chapters');
+            });
+          });
+        });
+      });
+    });
+  };
+
+  /* ============================================================
+     VIEW: ENROLMENTS
+     ============================================================ */
+  VIEWS.enrolments = function () {
+    return Promise.all([
+      GPN.api('adminListEnrolments'),
+      loadProgrammes(),
+      GPN.api('adminListStudents')
+    ]).then(function (res) {
+      var enrol = (res[0].ok && res[0].data && res[0].data.enrolments) || [];
+      var progs = res[1];
+      var students = (res[2].ok && res[2].data && res[2].data.students) || [];
+      var progMap = {}, stuMap = {};
+      progs.forEach(function (p) { progMap[p.ProgrammeID] = p; });
+      students.forEach(function (s) { stuMap[s.StudentID] = s; });
+
+      var html =
+        '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Enrolments (' + enrol.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddEnrol">+ Add</button>' +
+        '</div>';
+      if (!enrol.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No enrolments yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>ID</th><th>Student</th><th>Programme</th><th>Start</th><th>End</th><th>Status</th><th></th></tr></thead><tbody>';
+        enrol.forEach(function (e) {
+          var st = stuMap[e.StudentID] || {}, p = progMap[e.ProgrammeID] || {};
+          html += '<tr>' +
+            '<td data-label="ID" class="gpn-mono">' + esc(e.EnrolmentID) + '</td>' +
+            '<td data-label="Student">' + esc(st.Name || e.StudentID) + '</td>' +
+            '<td data-label="Programme">' + esc(p.Name || e.ProgrammeID) + '</td>' +
+            '<td data-label="Start">' + esc(fmtDate(e.StartDate)) + '</td>' +
+            '<td data-label="End">' + esc(fmtDate(e.EndDate)) + '</td>' +
+            '<td data-label="Status">' + pill(e.Status || '') + '</td>' +
+            '<td data-label="Actions"><button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-del="' + esc(e.EnrolmentID) + '">Delete</button></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddEnrol'), 'click', function () {
+        var stuOpts = '<option value="">— Select Student —</option>' + students.map(function (s) { return '<option value="' + esc(s.StudentID) + '">' + esc(s.Name) + ' (' + esc(s.StudentID) + ')</option>'; }).join('');
+        var progOpts = '<option value="">— Select Programme —</option>' + progs.map(function (p) { return '<option value="' + esc(p.ProgrammeID) + '">' + esc(p.Name) + '</option>'; }).join('');
+        var m =
+          '<h3 class="gpn-modal-title">Add Enrolment</h3>' +
+          '<div class="gpn-field"><label class="gpn-label">Student</label><select id="enStu" class="gpn-select">' + stuOpts + '</select></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Programme</label><select id="enProg" class="gpn-select">' + progOpts + '</select></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Subject IDs (comma, blank=all)</label><input id="enSubs" class="gpn-input"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Start Date</label><input id="enStart" class="gpn-input" type="date" value="' + GPN.todayISO() + '"></div>' +
+          '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="enCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="enSave">Create</button></div>';
+        openModal(m, function () {
+          GPN.on(GPN.byId('enCancel'), 'click', closeModal);
+          GPN.on(GPN.byId('enSave'), 'click', function () {
+            var subs = GPN.byId('enSubs').value.trim();
+            var payload = {
+              StudentID: GPN.byId('enStu').value,
+              ProgrammeID: GPN.byId('enProg').value,
+              SubjectIDs: subs ? subs.split(',').map(function (x) { return x.trim(); }).filter(Boolean) : '',
+              StartDate: GPN.byId('enStart').value
+            };
+            if (!payload.StudentID || !payload.ProgrammeID) { GPN.Toast.error('Student and Programme required.'); return; }
+            GPN.api('adminCreateEnrolment', payload).then(function (r) {
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              GPN.Toast.ok('Enrolment created. End: ' + ((r.data && r.data.EndDate) || '')); closeModal(); render('enrolments');
+            });
+          });
+        });
+      });
+      GPN.$$('button[data-del]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () {
+          if (!confirm('Delete enrolment ' + btn.dataset.del + '?')) return;
+          GPN.api('adminDeleteEnrolment', { id: btn.dataset.del }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Deleted.'); render('enrolments');
+          });
+        });
+      });
+    });
+  };
+
+  /* ============================================================
+     VIEW: MATERIALS
+     ============================================================ */
+  VIEWS.materials = function () {
+    return Promise.all([GPN.api('adminListMaterials'), loadSubjects(), loadChapters()]).then(function (res) {
+      var mats = (res[0].ok && res[0].data && res[0].data.materials) || [];
+      var subjects = res[1], chapters = res[2];
+      var subMap = {}; subjects.forEach(function (s) { subMap[s.SubjectID] = s.Name; });
+
+      var html =
+        '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Materials (' + mats.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddMaterial">+ Add</button>' +
+        '</div>';
+      if (!mats.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No materials yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Subject</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+        mats.forEach(function (m) {
+          html += '<tr>' +
+            '<td data-label="ID" class="gpn-mono">' + esc(m.MaterialID) + '</td>' +
+            '<td data-label="Title">' + esc(m.Title) + '</td>' +
+            '<td data-label="Type">' + esc(m.Type || '') + '</td>' +
+            '<td data-label="Subject">' + esc(subMap[m.SubjectID] || m.SubjectID || '—') + '</td>' +
+            '<td data-label="Status">' + pill(m.Status || '') + '</td>' +
+            '<td data-label="Actions">' +
+              (m.ViewURL ? '<a class="gpn-btn gpn-btn-ghost gpn-btn-sm" href="' + esc(m.ViewURL) + '" target="_blank" rel="noopener">View</a> ' : '') +
+              (m.DownloadURL ? '<a class="gpn-btn gpn-btn-ghost gpn-btn-sm" href="' + esc(m.DownloadURL) + '" target="_blank" rel="noopener">Download</a> ' : '') +
+              '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-del="' + esc(m.MaterialID) + '">Delete</button>' +
+            '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddMaterial'), 'click', function () {
+        var subOpts = '<option value="">— Optional —</option>' + subjects.map(function (s) { return '<option value="' + esc(s.SubjectID) + '">' + esc(s.Name) + '</option>'; }).join('');
+        var chOpts = '<option value="">— Optional —</option>' + chapters.map(function (c) { return '<option value="' + esc(c.ChapterID) + '">' + esc(c.Name) + '</option>'; }).join('');
+        var m =
+          '<h3 class="gpn-modal-title">Add Material</h3>' +
+          '<div class="gpn-field"><label class="gpn-label">Title</label><input id="mmTitle" class="gpn-input"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Type</label>' +
+            '<select id="mmType" class="gpn-select">' + ['NOTES','SOLUTION','WORKSHEET','VIDEO','OTHER'].map(function (t) { return '<option>' + t + '</option>'; }).join('') + '</select>' +
+          '</div>' +
+          '<div class="gpn-field"><label class="gpn-label">R2 Path</label><input id="mmPath" class="gpn-input" placeholder="class-6/maths/ch-01.pdf"><div class="gpn-hint">Relative path only — files./downloads. URLs built automatically.</div></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Subject (optional)</label><select id="mmSub" class="gpn-select">' + subOpts + '</select></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Chapter (optional)</label><select id="mmCh" class="gpn-select">' + chOpts + '</select></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Description</label><textarea id="mmDesc" class="gpn-textarea"></textarea></div>' +
+          '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="mmCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="mmSave">Create</button></div>';
+        openModal(m, function () {
+          GPN.on(GPN.byId('mmCancel'), 'click', closeModal);
+          GPN.on(GPN.byId('mmSave'), 'click', function () {
+            var payload = {
+              Title: GPN.byId('mmTitle').value.trim(),
+              Type: GPN.byId('mmType').value,
+              Path: GPN.byId('mmPath').value.trim(),
+              SubjectID: GPN.byId('mmSub').value,
+              ChapterID: GPN.byId('mmCh').value,
+              Description: GPN.byId('mmDesc').value
+            };
+            if (!payload.Title || !payload.Path) { GPN.Toast.error('Title and Path required.'); return; }
+            GPN.api('adminCreateMaterial', payload).then(function (r) {
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              GPN.Toast.ok('Material added.'); closeModal(); render('materials');
+            });
+          });
+        });
+      });
+
+      GPN.$$('button[data-del]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () {
+          if (!confirm('Delete material?')) return;
+          GPN.api('adminDeleteMaterial', { id: btn.dataset.del }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Deleted.'); render('materials');
+          });
+        });
+      });
+    });
+  };
+
+  /* ============================================================
+     VIEW: SCHEDULE
+     ============================================================ */
+  VIEWS.schedule = function () {
+    return Promise.all([
+      GPN.api('adminListSchedule'),
+      GPN.api('adminListStudents'),
+      loadProgrammes(),
+      GPN.api('adminListTests')
+    ]).then(function (res) {
+      var rows = (res[0].ok && res[0].data && res[0].data.schedule) || [];
+      var students = (res[1].ok && res[1].data && res[1].data.students) || [];
+      var progs = res[2];
+      var tests = (res[3].ok && res[3].data && res[3].data.tests) || [];
+      var testMap = {}; tests.forEach(function (t) { testMap[t.TestID] = t.Title; });
+
+      var html =
+        '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Schedule (' + rows.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddSched">+ Add</button>' +
+        '</div>';
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No schedule entries yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Student</th><th>Programme</th><th>Test</th><th>Status</th><th></th></tr></thead><tbody>';
+        rows.slice(0, 100).forEach(function (r) {
+          html += '<tr>' +
+            '<td data-label="Date">' + esc(fmtDate(r.Date)) + '</td>' +
+            '<td data-label="Time">' + esc((r.StartTime || '') + (r.EndTime ? '–' + r.EndTime : '')) + '</td>' +
+            '<td data-label="Type">' + esc(r.Type) + '</td>' +
+            '<td data-label="Student">' + esc(r.StudentID || '—') + '</td>' +
+            '<td data-label="Programme">' + esc(r.ProgrammeID || '—') + '</td>' +
+            '<td data-label="Test">' + esc(r.RefID ? (testMap[r.RefID] || r.RefID) : '—') + '</td>' +
+            '<td data-label="Status">' + pill(r.Status || '') + '</td>' +
+            '<td data-label="Actions"><button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-del="' + esc(r.ScheduleID) + '">Delete</button></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddSched'), 'click', function () {
+        var stuOpts = '<option value="">— Bulk (per-programme) —</option>' + students.map(function (s) { return '<option value="' + esc(s.StudentID) + '">' + esc(s.Name) + '</option>'; }).join('');
+        var progOpts = '<option value="">— Select —</option>' + progs.map(function (p) { return '<option value="' + esc(p.ProgrammeID) + '">' + esc(p.Name) + '</option>'; }).join('');
+        var testOpts = '<option value="">— None —</option>' + tests.map(function (t) { return '<option value="' + esc(t.TestID) + '">' + esc(t.Title) + '</option>'; }).join('');
+        var m =
+          '<h3 class="gpn-modal-title">Add Schedule Entry</h3>' +
+          '<div class="gpn-field"><label class="gpn-label">Type</label><select id="scType" class="gpn-select">' + ['Study','Practice','Test','Revision','Retest'].map(function (x) { return '<option>' + x + '</option>'; }).join('') + '</select></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Date</label><input id="scDate" class="gpn-input" type="date" value="' + GPN.todayISO() + '"></div>' +
+          '<div class="gpn-grid-2"><div class="gpn-field"><label class="gpn-label">Start</label><input id="scStart" class="gpn-input" type="time"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">End</label><input id="scEnd" class="gpn-input" type="time"></div></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Student (optional)</label><select id="scStu" class="gpn-select">' + stuOpts + '</select></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Programme (if no student)</label><select id="scProg" class="gpn-select">' + progOpts + '</select></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Test (if Type = Test)</label><select id="scRef" class="gpn-select">' + testOpts + '</select></div>' +
+          '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="scCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="scSave">Create</button></div>';
+        openModal(m, function () {
+          GPN.on(GPN.byId('scCancel'), 'click', closeModal);
+          GPN.on(GPN.byId('scSave'), 'click', function () {
+            var payload = {
+              Type: GPN.byId('scType').value,
+              Date: GPN.byId('scDate').value,
+              StartTime: GPN.byId('scStart').value,
+              EndTime: GPN.byId('scEnd').value,
+              StudentID: GPN.byId('scStu').value,
+              ProgrammeID: GPN.byId('scProg').value,
+              RefID: GPN.byId('scRef').value
+            };
+            if (!payload.StudentID && !payload.ProgrammeID) { GPN.Toast.error('Student or Programme required.'); return; }
+            if (payload.Type === 'Test' && !payload.RefID) { GPN.Toast.error('Select a Test.'); return; }
+            GPN.api('adminCreateSchedule', payload).then(function (r) {
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              GPN.Toast.ok('Scheduled.'); closeModal(); render('schedule');
+            });
+          });
+        });
+      });
+      GPN.$$('button[data-del]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () {
+          if (!confirm('Delete?')) return;
+          GPN.api('adminDeleteSchedule', { id: btn.dataset.del }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Deleted.'); render('schedule');
+          });
+        });
+      });
+    });
+  };
+
+  /* ============================================================
+     VIEW: TESTS
+     ============================================================ */
+  VIEWS.tests = function () {
+    return Promise.all([GPN.api('adminListTests'), loadSubjects(), loadChapters(), loadProgrammes()]).then(function (res) {
+      var tests = (res[0].ok && res[0].data && res[0].data.tests) || [];
+      var subjects = res[1], chapters = res[2], progs = res[3];
+      var subMap = {}; subjects.forEach(function (s) { subMap[s.SubjectID] = s.Name; });
+
+      var html =
+        '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Tests (' + tests.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddTest">+ Create</button>' +
+        '</div>';
+      if (!tests.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No tests yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>ID</th><th>Title</th><th>Subject</th><th>Marks</th><th>Price</th><th>Status</th><th>Form</th><th></th></tr></thead><tbody>';
+        tests.forEach(function (t) {
+          html += '<tr>' +
+            '<td data-label="ID" class="gpn-mono">' + esc(t.TestID) + '</td>' +
+            '<td data-label="Title" class="wrap">' + esc(t.Title) + '</td>' +
+            '<td data-label="Subject">' + esc(subMap[t.SubjectID] || t.SubjectID || '—') + '</td>' +
+            '<td data-label="Marks">' + esc(t.TotalMarks || 0) + '</td>' +
+            '<td data-label="Price">' + fmtCur(t.Price || 0) + '</td>' +
+            '<td data-label="Status">' + pill(t.Status || '') + '</td>' +
+            '<td data-label="Form">' + (t.FormID ? pill('Linked', 'published') : pill('None', 'draft')) + '</td>' +
+            '<td data-label="Actions"><button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-test="' + esc(t.TestID) + '">Open</button></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddTest'), 'click', function () { addTestModal(subjects, chapters, progs); });
+      GPN.$$('button[data-test]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () { openTest(btn.dataset.test); });
+      });
+    });
+  };
+
+  function addTestModal(subjects, chapters, progs) {
+    var subOpts = '<option value="">— Optional —</option>' + subjects.map(function (s) { return '<option value="' + esc(s.SubjectID) + '">' + esc(s.Name) + '</option>'; }).join('');
+    var chOpts = '<option value="">— Optional —</option>' + chapters.map(function (c) { return '<option value="' + esc(c.ChapterID) + '">' + esc(c.Name) + '</option>'; }).join('');
+    var progOpts = '<option value="">— Optional —</option>' + progs.map(function (p) { return '<option value="' + esc(p.ProgrammeID) + '">' + esc(p.Name) + '</option>'; }).join('');
+    var m =
+      '<h3 class="gpn-modal-title">Create Test (DRAFT)</h3>' +
+      '<div class="gpn-field"><label class="gpn-label">Title</label><input id="tstTitle" class="gpn-input"></div>' +
+      '<div class="gpn-grid-2"><div class="gpn-field"><label class="gpn-label">Total Marks</label><input id="tstMarks" class="gpn-input" type="number"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Duration (min)</label><input id="tstDur" class="gpn-input" type="number"></div></div>' +
+      '<div class="gpn-grid-2"><div class="gpn-field"><label class="gpn-label">Price</label><input id="tstPrice" class="gpn-input" type="number" value="0"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Gap Hours</label><input id="tstGap" class="gpn-input" type="number" value="3"></div></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Subject</label><select id="tstSub" class="gpn-select">' + subOpts + '</select></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Chapter</label><select id="tstCh" class="gpn-select">' + chOpts + '</select></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Programme</label><select id="tstProg" class="gpn-select">' + progOpts + '</select></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Class</label>' + classSelect('tstClass') + '</div>' +
+      '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="tstCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="tstSave">Create</button></div>';
+    openModal(m, function () {
+      GPN.on(GPN.byId('tstCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('tstSave'), 'click', function () {
+        var payload = {
+          Title: GPN.byId('tstTitle').value.trim(),
+          TotalMarks: GPN.byId('tstMarks').value,
+          Duration: GPN.byId('tstDur').value,
+          Price: GPN.byId('tstPrice').value,
+          GapHours: GPN.byId('tstGap').value,
+          SubjectID: GPN.byId('tstSub').value,
+          ChapterID: GPN.byId('tstCh').value,
+          ProgrammeID: GPN.byId('tstProg').value,
+          Class: GPN.byId('tstClass').value
+        };
+        if (!payload.Title) { GPN.Toast.error('Title required.'); return; }
+        GPN.api('adminCreateTest', payload).then(function (r) {
+          if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+          GPN.Toast.ok('Test created (DRAFT).'); closeModal(); openTest(r.data.TestID);
+        });
+      });
+    });
+  }
+
+  function openTest(tid) {
+    GPN.api('adminGetTest', { id: tid }).then(function (j) {
+      if (!j.ok || !j.data || !j.data.test) { GPN.Toast.error('Not found.'); return; }
+      var t = j.data.test;
+      var attempts = j.data.attempts || [];
+      var results = j.data.results || [];
+      var status = String(t.Status || '').toUpperCase();
+
+      var html =
+        '<h3 class="gpn-modal-title">' + esc(t.Title) + '</h3>' +
+        '<p class="gpn-modal-sub">' + esc(t.TestID) + ' · ' + status + ' · ' + t.TotalMarks + ' marks · ' + t.Duration + ' min · ' + fmtCur(t.Price || 0) + '</p>';
+
+      /* Form section */
+      html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Google Form</h3></div><div class="gpn-card-body">';
+      if (t.FormID) {
+        html += '<div class="gpn-quiet" style="margin-bottom:8px;">Linked. Form ID: <span class="gpn-mono">' + esc(t.FormID) + '</span></div>';
+        html += '<div class="gpn-row"><button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="tfCopyForm">Copy Form ID</button>' +
+                (t.FormURL ? '<a class="gpn-btn gpn-btn-ghost gpn-btn-sm" href="' + esc(t.FormURL) + '" target="_blank" rel="noopener">Open Form</a>' : '') + '</div>';
+      } else {
+        html += '<div class="gpn-field"><label class="gpn-label">Form URL</label><input id="tfUrl" class="gpn-input" placeholder="https://docs.google.com/forms/d/e/.../viewform"></div>';
+        html += '<div class="gpn-field"><label class="gpn-label">Form ID or Edit URL</label><input id="tfId" class="gpn-input"></div>';
+        html += '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" id="tfLink">Link Form</button>';
+      }
+      html += '</div></div>';
+
+      /* Lifecycle */
+      var ALLOWED = { DRAFT: ['AVAILABLE'], AVAILABLE: ['CLOSED'], CLOSED: ['EVALUATED'], EVALUATED: ['PUBLISHED'], PUBLISHED: [] };
+      var nexts = ALLOWED[status] || [];
+      html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Lifecycle</h3></div><div class="gpn-card-body">';
+      if (nexts.length) {
+        html += '<div class="gpn-row">' + nexts.map(function (n) { return '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" data-status="' + n + '">Move → ' + n + '</button>'; }).join('') + '</div>';
+      } else {
+        html += '<div class="gpn-quiet">No manual transitions available.</div>';
+      }
+      html += '</div></div>';
+
+      /* Sync + Publish */
+      html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Sync &amp; Publish</h3></div><div class="gpn-card-body">' +
+        '<div class="gpn-row">' +
+        '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" id="tfSync">Sync Submissions</button>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="tfPublish">Publish Evaluated</button>' +
+        '</div></div></div>';
+
+      /* Attempts */
+      html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Attempts (' + attempts.length + ')</h3></div>';
+      if (!attempts.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No attempts yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Attempt</th><th>Student</th><th>Status</th><th>Cost</th><th></th></tr></thead><tbody>';
+        attempts.forEach(function (a) {
+          html += '<tr>' +
+            '<td data-label="Attempt" class="gpn-mono">' + esc(a.AttemptID) + '</td>' +
+            '<td data-label="Student">' + esc(a.StudentID) + '</td>' +
+            '<td data-label="Status">' + pill(a.Status || '') + '</td>' +
+            '<td data-label="Cost">' + fmtCur(a.CostCharged || 0) + '</td>' +
+            '<td data-label="Actions">' + (String(a.Status).toUpperCase() === 'SUBMITTED' ? '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" data-eval="' + esc(a.AttemptID) + '">Evaluate</button>' : '') + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+
+      /* Results */
+      html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Results (' + results.length + ')</h3></div>';
+      if (!results.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No results yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Student</th><th>Score</th><th>%</th><th>Pub</th><th></th></tr></thead><tbody>';
+        results.forEach(function (r) {
+          html += '<tr>' +
+            '<td data-label="Student">' + esc(r.StudentID) + '</td>' +
+            '<td data-label="Score">' + esc(r.MarksObtained) + ' / ' + esc(r.MaxMarks) + '</td>' +
+            '<td data-label="%">' + esc(r.Percentage) + '</td>' +
+            '<td data-label="Pub">' + pill(r.PublicationStatus || '') + '</td>' +
+            '<td data-label="Actions">' + (String(r.PublicationStatus) === 'DRAFT' ? '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-pub="' + esc(r.AttemptID) + '">Publish</button>' : '') + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+
+      html += '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="tstClose">Close</button></div>';
+
+      openModal(html, function () {
+        GPN.on(GPN.byId('tstClose'), 'click', closeModal);
+        var cp = GPN.byId('tfCopyForm');
+        if (cp) GPN.on(cp, 'click', function () { GPN.Export.copy(t.FormID, 'Form ID copied'); });
+
+        var tfLink = GPN.byId('tfLink');
+        if (tfLink) GPN.on(tfLink, 'click', function () {
+          var url = GPN.byId('tfUrl').value.trim();
+          var fid = GPN.byId('tfId').value.trim();
+          if (!url || !fid) { GPN.Toast.error('Form URL and Form ID required.'); return; }
+          GPN.api('adminSetTestForm', { testId: tid, formUrl: url, formId: fid }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Form linked.'); openTest(tid);
+          });
+        });
+
+        GPN.$$('button[data-status]').forEach(function (btn) {
+          GPN.on(btn, 'click', function () {
+            if (!confirm('Move to ' + btn.dataset.status + '?')) return;
+            GPN.api('adminSetTestStatus', { testId: tid, status: btn.dataset.status }).then(function (r) {
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              GPN.Toast.ok('Moved to ' + btn.dataset.status); openTest(tid);
+            });
+          });
+        });
+
+        GPN.on(GPN.byId('tfSync'), 'click', function () {
+          var btn = GPN.byId('tfSync');
+          GPN.setLoading(btn, true, 'Syncing…');
+          GPN.api('adminSyncSubmissions', { testId: tid }).then(function (r) {
+            GPN.setLoading(btn, false);
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Synced. Processed ' + ((r.data && r.data.processed) || 0) + ', rejected ' + ((r.data && r.data.rejected) || 0));
+            openTest(tid);
+          });
+        });
+
+        GPN.on(GPN.byId('tfPublish'), 'click', function () {
+          if (!confirm('Publish all evaluated attempts?')) return;
+          GPN.api('adminPublishResult', { testId: tid }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Published ' + ((r.data && r.data.published) || 0) + ' result(s).'); openTest(tid);
+          });
+        });
+
+        GPN.$$('button[data-eval]').forEach(function (btn) {
+          GPN.on(btn, 'click', function () { closeModal(); renderEvaluation(btn.dataset.eval); });
+        });
+
+        GPN.$$('button[data-pub]').forEach(function (btn) {
+          GPN.on(btn, 'click', function () {
+            if (!confirm('Publish?')) return;
+            GPN.api('adminPublishResult', { attemptId: btn.dataset.pub }).then(function (r) {
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              GPN.Toast.ok('Published.'); openTest(tid);
+            });
+          });
+        });
+      });
+    });
+  }
+
+  /* ============================================================
+     VIEW: EVALUATIONS
+     ============================================================ */
+  VIEWS.evaluations = function () {
+    return GPN.api('adminListPendingEvaluations').then(function (j) {
+      var items = (j.ok && j.data && j.data.items) || [];
+      var html = '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Pending Evaluations (' + items.length + ')</h3></div>';
+      if (!items.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">All caught up.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Student</th><th>Test</th><th>Auto</th><th>Pending</th><th></th></tr></thead><tbody>';
+        items.forEach(function (it) {
+          html += '<tr>' +
+            '<td data-label="Student">' + esc(it.StudentName || it.StudentID) + '</td>' +
+            '<td data-label="Test">' + esc(it.TestTitle || it.TestID) + '</td>' +
+            '<td data-label="Auto">' + esc(it.AutoScore || 0) + ' / ' + esc(it.TotalMarks || 0) + '</td>' +
+            '<td data-label="Pending">' + esc(it.ManualPending || 0) + ' items</td>' +
+            '<td data-label="Actions"><button class="gpn-btn gpn-btn-primary gpn-btn-sm" data-eval="' + esc(it.AttemptID) + '">Evaluate</button></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+      GPN.$$('button[data-eval]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () { renderEvaluation(btn.dataset.eval); });
+      });
+    });
+  };
+
+  function renderEvaluation(attemptId) {
+    GPN.showContainerLoading(viewRoot, 'Loading evaluation…');
+    GPN.api('adminGetAttemptForEvaluation', { attemptId: attemptId }).then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var d = j.data || {};
+      var a = d.attempt || {};
+      var autoRows = d.autoRows || [], manualRows = d.manualRows || [];
+
+      var html = '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Evaluate — ' + esc(a.StudentName || a.StudentID) + '</h3>' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="evBack">← Back</button>' +
+        '</div><div class="gpn-card-body"><div class="gpn-quiet">' + esc(a.TestTitle) + ' · Auto: ' + d.autoScore + ' · Manual max: ' + d.manualMax + ' · Grand max: ' + d.grandMax + '</div></div></div>';
+
+      if (autoRows.length) {
+        html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Auto-scored (' + autoRows.length + ')</h3></div><div class="gpn-card-body">';
+        autoRows.forEach(function (r) {
+          html += '<div style="padding:8px 0;border-bottom:1px solid var(--border-hair);"><div class="gpn-quiet">' + esc(r.QuestionTitle) + '</div><div>' + esc(r.StudentAnswer || '—') + '</div><div style="color:var(--gold);font-weight:700;">Score: ' + r.AutoMarks + '</div></div>';
+        });
+        html += '</div></div>';
+      }
+
+      if (manualRows.length) {
+        html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Manual (' + manualRows.length + ')</h3></div><div class="gpn-card-body">';
+        manualRows.forEach(function (r, i) {
+          var cur = (r.ManualMarks === '' || r.ManualMarks === null) ? '' : r.ManualMarks;
+          html += '<div style="border:1px solid var(--border-soft);border-radius:6px;padding:12px;margin-bottom:10px;">' +
+            '<div class="gpn-quiet" style="margin-bottom:6px;">' + esc(r.QuestionTitle) + ' (max ' + r.MaxPoints + ')</div>' +
+            '<div style="background:rgba(0,0,0,.25);padding:8px;border-radius:4px;font-size:0.85rem;white-space:pre-wrap;margin-bottom:8px;">' + esc(r.StudentAnswer || '(blank)') + '</div>' +
+            '<div class="gpn-grid-2">' +
+              '<div class="gpn-field"><label class="gpn-label">Marks</label><input id="evM_' + i + '" class="gpn-input" type="number" min="0" max="' + r.MaxPoints + '" value="' + esc(cur) + '"></div>' +
+              '<div class="gpn-field"><label class="gpn-label">Remark</label><input id="evR_' + i + '" class="gpn-input" value="' + esc(r.EvaluatorRemark || '') + '"></div>' +
+            '</div>' +
+          '</div>';
+        });
+        html += '<button class="gpn-btn gpn-btn-primary" id="evSave">Save Evaluation</button></div></div>';
+      }
+
+      viewRoot.innerHTML = html;
+      GPN.on(GPN.byId('evBack'), 'click', function () { render('evaluations'); });
+
+      var save = GPN.byId('evSave');
+      if (save) GPN.on(save, 'click', function () {
+        var evals = [];
+        manualRows.forEach(function (r, i) {
+          var mk = GPN.byId('evM_' + i).value.trim();
+          if (mk === '') return;
+          evals.push({ answerId: r.AnswerID, marks: Number(mk), remark: GPN.byId('evR_' + i).value.trim() });
+        });
+        if (!evals.length) { GPN.Toast.error('Enter at least one mark.'); return; }
+        GPN.setLoading(save, true, 'Saving…');
+        GPN.api('adminSubmitEvaluation', { attemptId: attemptId, evaluations: evals }).then(function (r) {
+          GPN.setLoading(save, false);
+          if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+          var dd = r.data || {};
+          if (dd.status === 'PARTIAL') {
+            GPN.Toast.ok('Partial. ' + dd.pendingRemaining + ' pending.');
+            renderEvaluation(attemptId);
+          } else {
+            GPN.Toast.ok('Complete. ' + dd.totalObtained + ' / ' + dd.grandMax);
+            render('evaluations');
+          }
+        });
+      });
+    });
+  }
+
+  /* ============================================================
+     VIEW: RESULTS
+     ============================================================ */
+  VIEWS.results = function () {
+    return GPN.api('adminListResults').then(function (j) {
+      var rows = (j.ok && j.data && j.data.results) || [];
+      var html = '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Results (' + rows.length + ')</h3></div>';
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No results.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Student</th><th>Test</th><th>Score</th><th>%</th><th>Pub</th><th></th></tr></thead><tbody>';
+        rows.forEach(function (r) {
+          html += '<tr>' +
+            '<td data-label="Student">' + esc(r.StudentID) + '</td>' +
+            '<td data-label="Test" class="gpn-mono">' + esc(r.TestID) + '</td>' +
+            '<td data-label="Score">' + esc(r.MarksObtained) + ' / ' + esc(r.MaxMarks) + '</td>' +
+            '<td data-label="%">' + esc(r.Percentage) + '</td>' +
+            '<td data-label="Pub">' + pill(r.PublicationStatus || '') + '</td>' +
+            '<td data-label="Actions">' + (String(r.PublicationStatus) === 'DRAFT' ? '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-pub="' + esc(r.AttemptID) + '">Publish</button>' : '') + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+      GPN.$$('button[data-pub]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () {
+          if (!confirm('Publish?')) return;
+          GPN.api('adminPublishResult', { attemptId: btn.dataset.pub }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Published.'); render('results');
+          });
+        });
+      });
+    });
+  };
+
+  /* ============================================================
+     VIEW: PAYMENTS
+     ============================================================ */
+  VIEWS.payments = function () {
+    return Promise.all([GPN.api('adminListPayments'), GPN.api('adminListStudents'), loadProgrammes()]).then(function (res) {
+      var pays = (res[0].ok && res[0].data && res[0].data.payments) || [];
+      var students = (res[1].ok && res[1].data && res[1].data.students) || [];
+      var progs = res[2];
+
+      var html =
+        '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Payments (' + pays.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddPay">+ Record</button>' +
+        '</div>';
+      if (!pays.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No payments.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Date</th><th>Student</th><th>Amount</th><th>Method</th><th>Ref</th></tr></thead><tbody>';
+        pays.slice(0, 200).forEach(function (p) {
+          html += '<tr>' +
+            '<td data-label="Date">' + esc(fmtDate(p.PaymentDate)) + '</td>' +
+            '<td data-label="Student">' + esc(p.StudentID) + '</td>' +
+            '<td data-label="Amount" style="color:var(--gold);font-weight:700;">' + fmtCur(p.Amount || 0) + '</td>' +
+            '<td data-label="Method">' + esc(p.Method || '') + '</td>' +
+            '<td data-label="Ref">' + esc(p.Reference || '—') + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddPay'), 'click', function () {
+        var stuOpts = '<option value="">— Select —</option>' + students.map(function (s) { return '<option value="' + esc(s.StudentID) + '">' + esc(s.Name) + ' (' + esc(s.StudentID) + ')</option>'; }).join('');
+        var progOpts = '<option value="">— Optional —</option>' + progs.map(function (p) { return '<option value="' + esc(p.ProgrammeID) + '">' + esc(p.Name) + '</option>'; }).join('');
+        var m =
+          '<h3 class="gpn-modal-title">Record Payment</h3>' +
+          '<div class="gpn-field"><label class="gpn-label">Student</label><select id="pStu" class="gpn-select">' + stuOpts + '</select></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Programme (optional)</label><select id="pProg" class="gpn-select">' + progOpts + '</select></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Amount</label><input id="pAmt" class="gpn-input" type="number"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Method</label><select id="pMethod" class="gpn-select">' + ['UPI','NEFT','Cash','Card','Other'].map(function (x) { return '<option>' + x + '</option>'; }).join('') + '</select></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Reference</label><input id="pRef" class="gpn-input"></div>' +
+          '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="pCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="pSave">Record</button></div>';
+        openModal(m, function () {
+          GPN.on(GPN.byId('pCancel'), 'click', closeModal);
+          GPN.on(GPN.byId('pSave'), 'click', function () {
+            var payload = {
+              StudentID: GPN.byId('pStu').value,
+              ProgrammeID: GPN.byId('pProg').value,
+              Amount: GPN.byId('pAmt').value,
+              Method: GPN.byId('pMethod').value,
+              Reference: GPN.byId('pRef').value
+            };
+            if (!payload.StudentID || !payload.Amount) { GPN.Toast.error('Student and Amount required.'); return; }
+            GPN.api('adminCreatePayment', payload).then(function (r) {
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              GPN.Toast.ok('Recorded. Balance: ' + fmtCur((r.data && r.data.BalanceAfter) || 0));
+              closeModal(); render('payments');
+            });
+          });
+        });
+      });
+    });
+  };
+
+  /* ============================================================
+     VIEW: CONTENT (announcements, counters, socials)
+     ============================================================ */
+  VIEWS.content = function () {
+    return Promise.all([
+      GPN.api('adminGetAnnouncement'),
+      GPN.api('adminListCounters'),
+      GPN.api('adminGetSocials')
+    ]).then(function (res) {
+      var ann = res[0].ok ? res[0].data : {};
+      var ctr = res[1].ok ? res[1].data.counters || [] : [];
+      var soc = res[2].ok ? res[2].data : { links: [], gbp: '' };
+
+      var html =
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Announcement</h3></div><div class="gpn-card-body">' +
+          '<div class="gpn-field"><label class="gpn-label">Title</label><input id="anTitle" class="gpn-input" value="' + esc(ann.title || '') + '"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">HTML</label><textarea id="anHtml" class="gpn-textarea" placeholder="Raw HTML is allowed">' + esc(ann.html || '') + '</textarea></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Active</label><select id="anActive" class="gpn-select"><option value="true"' + (ann.active ? ' selected' : '') + '>Yes</option><option value="false"' + (!ann.active ? ' selected' : '') + '>No</option></select></div>' +
+          '<button class="gpn-btn gpn-btn-primary" id="anSave">Save Announcement</button>' +
+        '</div></div>' +
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Counters (' + ctr.length + ')</h3></div><div class="gpn-card-body">' +
+          '<div id="ctrList"></div>' +
+          '<div class="gpn-row" style="margin-top:10px;"><button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="ctrAdd">+ Add</button>' +
+          '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="ctrSave">Save Counters</button></div>' +
+        '</div></div>' +
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Social Links (' + (soc.links || []).length + ')</h3></div><div class="gpn-card-body">' +
+          '<div class="gpn-field"><label class="gpn-label">GBP Review URL</label><input id="socGbp" class="gpn-input" value="' + esc(soc.gbp || '') + '"></div>' +
+          '<div id="socList"></div>' +
+          '<div class="gpn-row" style="margin-top:10px;"><button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="socAdd">+ Add Link</button>' +
+          '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="socSave">Save Socials</button></div>' +
+        '</div></div>';
+
+      viewRoot.innerHTML = html;
+
+      /* Announcement save */
+      GPN.on(GPN.byId('anSave'), 'click', function () {
+        GPN.api('adminSetAnnouncement', {
+          title: GPN.byId('anTitle').value,
+          html: GPN.byId('anHtml').value,
+          active: GPN.byId('anActive').value === 'true'
+        }).then(function (r) {
+          if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+          GPN.Toast.ok('Announcement saved.');
+        });
+      });
+
+      /* Counters */
+      var counters = ctr.map(function (c) { return Object.assign({}, c); });
+      function renderCounters() {
+        GPN.byId('ctrList').innerHTML = counters.map(function (c, i) {
+          return '<div class="gpn-grid-2" style="margin-bottom:8px;">' +
+            '<div class="gpn-field"><label class="gpn-label">Icon</label><input class="gpn-input" data-i="' + i + '" data-k="icon" value="' + esc(c.icon || '') + '" maxlength="4"></div>' +
+            '<div class="gpn-field"><label class="gpn-label">Label</label><input class="gpn-input" data-i="' + i + '" data-k="label" value="' + esc(c.label || '') + '"></div>' +
+            '<div class="gpn-field"><label class="gpn-label">Value</label><input class="gpn-input" data-i="' + i + '" data-k="value" value="' + esc(c.value || '') + '"></div>' +
+            '<div class="gpn-field"><label class="gpn-label">Active</label><select class="gpn-select" data-i="' + i + '" data-k="active"><option value="true"' + (c.active ? ' selected' : '') + '>Yes</option><option value="false"' + (!c.active ? ' selected' : '') + '>No</option></select></div>' +
+            '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-rem="' + i + '">Remove</button>' +
+          '</div>';
+        }).join('');
+        GPN.$$('#ctrList input, #ctrList select').forEach(function (el) {
+          GPN.on(el, 'input', function () {
+            var i = Number(el.dataset.i), k = el.dataset.k;
+            counters[i][k] = (k === 'active') ? (el.value === 'true') : el.value;
+          });
+          GPN.on(el, 'change', function () {
+            var i = Number(el.dataset.i), k = el.dataset.k;
+            counters[i][k] = (k === 'active') ? (el.value === 'true') : el.value;
+          });
+        });
+        GPN.$$('#ctrList button[data-rem]').forEach(function (b) {
+          GPN.on(b, 'click', function () { counters.splice(Number(b.dataset.rem), 1); renderCounters(); });
+        });
+      }
+      renderCounters();
+      GPN.on(GPN.byId('ctrAdd'), 'click', function () {
+        if (counters.length >= 6) { GPN.Toast.error('Max 6 counters.'); return; }
+        counters.push({ icon: '', label: '', value: '', active: true });
+        renderCounters();
+      });
+      GPN.on(GPN.byId('ctrSave'), 'click', function () {
+        GPN.api('adminSaveCounters', { counters: counters }).then(function (r) {
+          if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+          GPN.Toast.ok('Counters saved.');
+        });
+      });
+
+      /* Socials */
+      var links = (soc.links || []).map(function (l) { return Object.assign({}, l); });
+      function renderSocials() {
+        GPN.byId('socList').innerHTML = links.map(function (l, i) {
+          return '<div class="gpn-grid-2" style="margin-bottom:8px;">' +
+            '<div class="gpn-field"><label class="gpn-label">Icon</label><input class="gpn-input" data-i="' + i + '" data-k="icon" value="' + esc(l.icon || '') + '" maxlength="4"></div>' +
+            '<div class="gpn-field"><label class="gpn-label">Label</label><input class="gpn-input" data-i="' + i + '" data-k="label" value="' + esc(l.label || '') + '"></div>' +
+            '<div class="gpn-field" style="grid-column:1/-1;"><label class="gpn-label">URL</label><input class="gpn-input" data-i="' + i + '" data-k="url" value="' + esc(l.url || '') + '"></div>' +
+            '<div class="gpn-field"><label class="gpn-label">Group</label><input class="gpn-input" data-i="' + i + '" data-k="group" value="' + esc(l.group || 'connect') + '"></div>' +
+            '<div class="gpn-field"><label class="gpn-label">Active</label><select class="gpn-select" data-i="' + i + '" data-k="active"><option value="true"' + (l.active ? ' selected' : '') + '>Yes</option><option value="false"' + (!l.active ? ' selected' : '') + '>No</option></select></div>' +
+            '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-rem="' + i + '">Remove</button>' +
+          '</div>';
+        }).join('');
+        GPN.$$('#socList input, #socList select').forEach(function (el) {
+          GPN.on(el, 'input', function () {
+            var i = Number(el.dataset.i), k = el.dataset.k;
+            links[i][k] = (k === 'active') ? (el.value === 'true') : el.value;
+          });
+          GPN.on(el, 'change', function () {
+            var i = Number(el.dataset.i), k = el.dataset.k;
+            links[i][k] = (k === 'active') ? (el.value === 'true') : el.value;
+          });
+        });
+        GPN.$$('#socList button[data-rem]').forEach(function (b) {
+          GPN.on(b, 'click', function () { links.splice(Number(b.dataset.rem), 1); renderSocials(); });
+        });
+      }
+      renderSocials();
+      GPN.on(GPN.byId('socAdd'), 'click', function () {
+        links.push({ icon: '', label: '', url: '', group: 'connect', active: true });
+        renderSocials();
+      });
+      GPN.on(GPN.byId('socSave'), 'click', function () {
+        GPN.api('adminSetSocials', { links: links, gbp: GPN.byId('socGbp').value }).then(function (r) {
+          if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+          GPN.Toast.ok('Socials saved.');
+        });
+      });
+    });
+  };
+
+  /* ============================================================
+     SHARED SELECT HELPERS
+     ============================================================ */
+  function classSelect(id, value) {
+    var opts = (window.GPN_CONFIG.CLASSES || []).map(function (c) {
+      return '<option value="' + esc(c) + '"' + (value === c ? ' selected' : '') + '>' + esc(c) + '</option>';
+    }).join('');
+    return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
+  }
+  function boardSelect(id, value) {
+    var opts = (window.GPN_CONFIG.BOARDS || []).map(function (b) {
+      return '<option value="' + esc(b) + '"' + (value === b ? ' selected' : '') + '>' + esc(b) + '</option>';
+    }).join('');
+    return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
+  }
+
+})();
+</script>
+</body>
+</html>
