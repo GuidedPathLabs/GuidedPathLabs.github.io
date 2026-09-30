@@ -1,1 +1,540 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Automation — GPN Admin</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body>
+
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">Automation <b>Console</b></div>
+    </div>
+    <div class="gpn-topbar-user">
+      <span class="gpn-user-badge" id="userBadge">—</span>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnLogout" type="button">Logout</button>
+    </div>
+  </header>
+
+  <nav class="gpn-navstrip">
+    <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
+    <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
+    <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn active" href="admin-automation.html">Automation</a>
+    <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
+    <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
+    <a class="gpn-navstrip-btn" href="admin-settings.html">Settings</a>
+  </nav>
+
+  <main class="gpn-main">
+
+    <div class="gpn-chips" id="subTabs">
+      <button class="gpn-chip active" data-view="overview">Overview</button>
+      <button class="gpn-chip" data-view="pdf">PDF Queue</button>
+      <button class="gpn-chip" data-view="social">Social Queue</button>
+      <button class="gpn-chip" data-view="logs">Logs</button>
+    </div>
+
+    <div id="viewRoot">
+      <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+    </div>
+
+  </main>
+</div>
+
+<div class="gpn-modal" id="modalGeneric" hidden>
+  <div class="gpn-modal-card" id="modalGenericCard"></div>
+</div>
+
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  if (!GPN.Guard.requireAdmin()) return;
+
+  var viewRoot = null;
+  var appRoot  = null;
+
+  GPN.ready(function () {
+    appRoot  = GPN.byId('appRoot');
+    viewRoot = GPN.byId('viewRoot');
+
+    GPN.byId('userBadge').textContent = GPN.Session.getName() || 'Admin';
+    GPN.byId('userBadge').title = GPN.Session.getUser() || '';
+
+    GPN.$$('#subTabs .gpn-chip').forEach(function (btn) {
+      GPN.on(btn, 'click', function () {
+        GPN.$$('#subTabs .gpn-chip').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        render(btn.dataset.view);
+      });
+    });
+
+    GPN.on(GPN.byId('btnLogout'), 'click', function () {
+      if (confirm('Sign out?')) GPN.Guard.logout();
+    });
+
+    GPN.Modal.wire('modalGeneric');
+
+    appRoot.hidden = false;
+    GPN.byId('pageLoading').hidden = true;
+
+    render('overview');
+  });
+
+  function render(view) {
+    GPN.showContainerLoading(viewRoot, 'Loading…');
+    var fn = VIEWS[view] || VIEWS.overview;
+    Promise.resolve(fn()).catch(function (err) {
+      console.error(view, err);
+      GPN.showContainerError(viewRoot, 'Failed to load.');
+    });
+  }
+
+  function openModal(html, onReady) {
+    GPN.byId('modalGenericCard').innerHTML = html;
+    GPN.Modal.open('modalGeneric');
+    if (typeof onReady === 'function') setTimeout(onReady, 20);
+  }
+  function closeModal() { GPN.Modal.close('modalGeneric'); }
+
+  function esc(s) { return GPN.esc(s); }
+  function fmtDT(d) { return GPN.formatDateTime(d); }
+  function pill(text, tone) {
+    var cls = tone || String(text || '').toLowerCase().replace(/[^a-z]/g, '');
+    return '<span class="gpn-pill ' + esc(cls) + '">' + esc(text) + '</span>';
+  }
+  function statCard(label, value, tone) {
+    return '<div class="gpn-stat"><span class="gpn-stat-label">' + esc(label) + '</span><span class="gpn-stat-value ' + (tone || '') + '">' + esc(String(value)) + '</span></div>';
+  }
+
+  var VIEWS = {};
+
+  /* ============================================================
+     OVERVIEW
+     ============================================================ */
+  VIEWS.overview = function () {
+    return GPN.api('adminAutoStats').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var d = j.data || {};
+      var pdf = d.pdf || {};
+      var soc = d.social || {};
+
+      var html = '<div class="gpn-grid-2">' +
+        '<div class="gpn-card">' +
+          '<div class="gpn-card-head">' +
+            '<h3 class="gpn-card-title">PDF Queue</h3>' +
+            '<a href="#" class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-goto="pdf">Open →</a>' +
+          '</div>' +
+          '<div class="gpn-card-body">' +
+            '<div class="gpn-stats" style="margin-bottom:0;">' +
+              statCard('Total', pdf.total || 0) +
+              statCard('Ready', pdf.ready || 0, 'info') +
+              statCard('Processing', pdf.processing || 0, 'warn') +
+              statCard('Completed', pdf.completed || 0, 'green') +
+              statCard('Errors', pdf.error || 0, 'error') +
+              statCard('Cancelled', pdf.cancelled || 0) +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="gpn-card">' +
+          '<div class="gpn-card-head">' +
+            '<h3 class="gpn-card-title">Social Queue</h3>' +
+            '<a href="#" class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-goto="social">Open →</a>' +
+          '</div>' +
+          '<div class="gpn-card-body">' +
+            '<div class="gpn-stats" style="margin-bottom:0;">' +
+              statCard('Total', soc.total || 0) +
+              statCard('Ready', soc.ready || 0, 'info') +
+              statCard('Processing', soc.processing || 0, 'warn') +
+              statCard('Completed', soc.completed || 0, 'green') +
+              statCard('Errors', soc.error || 0, 'error') +
+              statCard('Cancelled', soc.cancelled || 0) +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+      html += '<div class="gpn-card" style="margin-top:16px;">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Quick Actions</h3></div>' +
+        '<div class="gpn-card-body"><div class="gpn-row">' +
+          '<button class="gpn-btn gpn-btn-cyan" id="qaPdfAdd">+ Add PDF Job</button>' +
+          '<button class="gpn-btn gpn-btn-cyan" id="qaSocAdd">+ Add Social Post</button>' +
+        '</div></div></div>';
+
+      viewRoot.innerHTML = html;
+
+      GPN.$$('a[data-goto]').forEach(function (a) {
+        GPN.on(a, 'click', function (e) {
+          e.preventDefault();
+          document.querySelector('#subTabs button[data-view="' + a.dataset.goto + '"]').click();
+        });
+      });
+      GPN.on(GPN.byId('qaPdfAdd'), 'click', function () {
+        document.querySelector('#subTabs button[data-view="pdf"]').click();
+        setTimeout(addPdfModal, 300);
+      });
+      GPN.on(GPN.byId('qaSocAdd'), 'click', function () {
+        document.querySelector('#subTabs button[data-view="social"]').click();
+        setTimeout(addSocialModal, 300);
+      });
+    });
+  };
+
+  /* ============================================================
+     PDF QUEUE
+     ============================================================ */
+  VIEWS.pdf = function () {
+    return GPN.api('adminAutoPdfList').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var rows = (j.data && j.data.jobs) || [];
+
+      var html = '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h3 class="gpn-card-title">PDF Queue (' + rows.length + ')</h3>' +
+          '<div class="gpn-row">' +
+            '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddPdf">+ Add</button>' +
+            '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnReloadPdf">Refresh</button>' +
+          '</div>' +
+        '</div>';
+
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No PDF jobs yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr>' +
+            '<th>Job ID</th><th>Title</th><th>Class</th><th>Status</th>' +
+            '<th>Attempts</th><th>R2 URL</th><th>Created</th><th>Actions</th>' +
+          '</tr></thead><tbody>';
+        rows.forEach(function (r) {
+          var status = String(r.Status || 'READY').toUpperCase();
+          var r2Cell = r.R2_URL
+            ? '<a href="' + esc(r.R2_URL) + '" target="_blank" rel="noopener" class="gpn-btn gpn-btn-ghost gpn-btn-sm">Open</a>'
+            : '—';
+          var actions = '';
+          if (status === 'ERROR' || status === 'CANCELLED') {
+            actions += '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" data-retry="' + esc(r.Job_ID) + '">Retry</button> ';
+          }
+          if (status === 'READY' || status === 'ERROR') {
+            actions += '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-cancel="' + esc(r.Job_ID) + '">Cancel</button>';
+          }
+          if (!actions) actions = '—';
+
+          html += '<tr>' +
+            '<td data-label="Job ID" class="gpn-mono">' + esc(r.Job_ID) + '</td>' +
+            '<td data-label="Title" class="wrap">' + esc(r.Post_Title || '') + '</td>' +
+            '<td data-label="Class">' + esc(r.Class || '') + '</td>' +
+            '<td data-label="Status">' + pill(status) + '</td>' +
+            '<td data-label="Attempts">' + esc(r.Attempts || 0) + '</td>' +
+            '<td data-label="R2 URL">' + r2Cell + '</td>' +
+            '<td data-label="Created">' + esc(fmtDT(r.Created_At)) + '</td>' +
+            '<td data-label="Actions">' + actions + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddPdf'), 'click', addPdfModal);
+      GPN.on(GPN.byId('btnReloadPdf'), 'click', function () { render('pdf'); });
+
+      GPN.$$('button[data-retry]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          if (!confirm('Re-queue job ' + b.dataset.retry + '?')) return;
+          GPN.api('adminAutoPdfRetry', { jobId: b.dataset.retry }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Job re-queued.'); render('pdf');
+          });
+        });
+      });
+      GPN.$$('button[data-cancel]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          if (!confirm('Cancel job ' + b.dataset.cancel + '?')) return;
+          GPN.api('adminAutoPdfCancel', { jobId: b.dataset.cancel }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Cancelled.'); render('pdf');
+          });
+        });
+      });
+    });
+  };
+
+  function addPdfModal() {
+    var html =
+      '<h3 class="gpn-modal-title">Add PDF Job</h3>' +
+      '<p class="gpn-modal-sub">n8n will read this row, generate the PDF, upload to R2, and write back the URL.</p>' +
+      '<div class="gpn-field gpn-field-full"><label class="gpn-label">Blogger URL</label><input id="pdfUrl" class="gpn-input" placeholder="https://guidedpathnoida.in/2026/09/..."></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Post Title</label><input id="pdfTitle" class="gpn-input"></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Class</label>' + classSelect('pdfClass') + '</div>' +
+        '<div class="gpn-field"><label class="gpn-label">Subject</label><input id="pdfSubject" class="gpn-input" placeholder="Maths"></div>' +
+      '</div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Chapter No.</label><input id="pdfChNo" class="gpn-input" placeholder="01"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Chapter Name</label><input id="pdfChName" class="gpn-input"></div>' +
+      '</div>' +
+      '<div class="gpn-field"><label class="gpn-label">PDF Filename</label><input id="pdfFilename" class="gpn-input" placeholder="ch-01.pdf"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">R2 Folder</label><input id="pdfR2Folder" class="gpn-input" placeholder="Class-06/Maths"><span class="gpn-hint">No leading or trailing slash</span></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Generate PDF</label>' +
+        '<select id="pdfGenerate" class="gpn-select"><option value="YES">YES</option><option value="NO">NO</option></select>' +
+      '</div>' +
+      '<div id="pdfErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="pdfCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-cyan" id="pdfSave">Add to Queue</button>' +
+      '</div>';
+
+    openModal(html, function () {
+      GPN.on(GPN.byId('pdfCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('pdfSave'), 'click', function () {
+        var err = GPN.byId('pdfErr'); err.hidden = true;
+        var payload = {
+          blogger_url:  GPN.byId('pdfUrl').value.trim(),
+          post_title:   GPN.byId('pdfTitle').value.trim(),
+          'class':      GPN.byId('pdfClass').value,
+          subject:      GPN.byId('pdfSubject').value.trim(),
+          chapter_no:   GPN.byId('pdfChNo').value.trim(),
+          chapter_name: GPN.byId('pdfChName').value.trim(),
+          pdf_filename: GPN.byId('pdfFilename').value.trim(),
+          r2_folder:    GPN.byId('pdfR2Folder').value.trim(),
+          generate_pdf: GPN.byId('pdfGenerate').value
+        };
+        var required = ['blogger_url','post_title','class','subject','chapter_no','chapter_name','pdf_filename','r2_folder'];
+        for (var i = 0; i < required.length; i++) {
+          if (!payload[required[i]]) { err.textContent = 'All fields required.'; err.hidden = false; return; }
+        }
+        if (payload.blogger_url.indexOf('https://') !== 0) {
+          err.textContent = 'Blogger URL must start with https://'; err.hidden = false; return;
+        }
+        var btn = GPN.byId('pdfSave');
+        GPN.setLoading(btn, true, 'Adding…');
+        GPN.api('adminAutoPdfAdd', payload).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Added: ' + (r.data.Job_ID || ''));
+          closeModal(); render('pdf');
+        });
+      });
+    });
+  }
+
+  /* ============================================================
+     SOCIAL QUEUE
+     ============================================================ */
+  VIEWS.social = function () {
+    return GPN.api('adminAutoSocialList').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var rows = (j.data && j.data.posts) || [];
+
+      var html = '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h3 class="gpn-card-title">Social Queue (' + rows.length + ')</h3>' +
+          '<div class="gpn-row">' +
+            '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddSoc">+ Add</button>' +
+            '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnReloadSoc">Refresh</button>' +
+          '</div>' +
+        '</div>';
+
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No social posts yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr>' +
+            '<th>Post ID</th><th>Title</th><th>Scheduled</th><th>Status</th>' +
+            '<th>FB</th><th>IG</th><th>TH</th><th>PIN</th><th>WA</th><th>Actions</th>' +
+          '</tr></thead><tbody>';
+        rows.forEach(function (r) {
+          var status = String(r.Status || 'READY').toUpperCase();
+          var sched = ((r.Publish_Date || '') + ' ' + (r.Publish_Time || '')).trim();
+          var actions = '';
+          if (status === 'ERROR' || status === 'PARTIAL' || status === 'CANCELLED') {
+            actions += '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" data-retry="' + esc(r.Post_ID) + '">Retry</button> ';
+          }
+          if (status === 'READY' || status === 'ERROR' || status === 'PARTIAL') {
+            actions += '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-cancel="' + esc(r.Post_ID) + '">Cancel</button>';
+          }
+          if (!actions) actions = '—';
+
+          html += '<tr>' +
+            '<td data-label="Post ID" class="gpn-mono">' + esc(r.Post_ID) + '</td>' +
+            '<td data-label="Title" class="wrap">' + esc(r.Post_Title || '') + '</td>' +
+            '<td data-label="Scheduled">' + esc(sched || '—') + '</td>' +
+            '<td data-label="Status">' + pill(status) + '</td>' +
+            '<td data-label="FB">' + pill(r.FB_Status || 'PENDING') + '</td>' +
+            '<td data-label="IG">' + pill(r.Instagram_Status || 'PENDING') + '</td>' +
+            '<td data-label="TH">' + pill(r.Threads_Status || 'PENDING') + '</td>' +
+            '<td data-label="PIN">' + pill(r.Pinterest_Status || 'PENDING') + '</td>' +
+            '<td data-label="WA">' + pill(r.WhatsApp_Status || 'PENDING') + '</td>' +
+            '<td data-label="Actions">' + actions + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddSoc'), 'click', addSocialModal);
+      GPN.on(GPN.byId('btnReloadSoc'), 'click', function () { render('social'); });
+
+      GPN.$$('button[data-retry]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          if (!confirm('Re-queue post ' + b.dataset.retry + '?')) return;
+          GPN.api('adminAutoSocialRetry', { postId: b.dataset.retry }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Re-queued.'); render('social');
+          });
+        });
+      });
+      GPN.$$('button[data-cancel]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          if (!confirm('Cancel post ' + b.dataset.cancel + '?')) return;
+          GPN.api('adminAutoSocialCancel', { postId: b.dataset.cancel }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Cancelled.'); render('social');
+          });
+        });
+      });
+    });
+  };
+
+  function addSocialModal() {
+    function platformBlock(key, label) {
+      return '<div class="gpn-card" style="margin:12px 0;">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">' + esc(label) + '</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div class="gpn-field"><label class="gpn-label">Caption</label><textarea id="soc_' + key + '_cap" class="gpn-textarea" rows="3"></textarea></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Image URL</label><input id="soc_' + key + '_img" class="gpn-input" placeholder="https://assets.guidedpathnoida.in/..."></div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    var html =
+      '<h3 class="gpn-modal-title">Add Social Post</h3>' +
+      '<p class="gpn-modal-sub">Provide captions for at least one platform. n8n publishes at the scheduled time.</p>' +
+      '<div class="gpn-field"><label class="gpn-label">Post Title</label><input id="socTitle" class="gpn-input"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Internal Summary (optional)</label><textarea id="socSummary" class="gpn-textarea" rows="2"></textarea></div>' +
+      platformBlock('fb', 'Facebook') +
+      platformBlock('ig', 'Instagram') +
+      platformBlock('th', 'Threads') +
+      platformBlock('pin', 'Pinterest') +
+      platformBlock('wa', 'WhatsApp') +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Publish Date</label><input id="socDate" class="gpn-input" type="date" value="' + GPN.todayISO() + '"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Publish Time</label><input id="socTime" class="gpn-input" type="time" value="18:00"></div>' +
+      '</div>' +
+      '<div id="socErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="socCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-cyan" id="socSave">Add to Queue</button>' +
+      '</div>';
+
+    openModal(html, function () {
+      GPN.on(GPN.byId('socCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('socSave'), 'click', function () {
+        var err = GPN.byId('socErr'); err.hidden = true;
+        var payload = {
+          post_title:   GPN.byId('socTitle').value.trim(),
+          post_summary: GPN.byId('socSummary').value.trim(),
+          fb_caption:          GPN.byId('soc_fb_cap').value.trim(),
+          fb_image_url:        GPN.byId('soc_fb_img').value.trim(),
+          instagram_caption:   GPN.byId('soc_ig_cap').value.trim(),
+          instagram_image_url: GPN.byId('soc_ig_img').value.trim(),
+          threads_caption:     GPN.byId('soc_th_cap').value.trim(),
+          threads_image_url:   GPN.byId('soc_th_img').value.trim(),
+          pinterest_caption:   GPN.byId('soc_pin_cap').value.trim(),
+          pinterest_image_url: GPN.byId('soc_pin_img').value.trim(),
+          whatsapp_caption:    GPN.byId('soc_wa_cap').value.trim(),
+          whatsapp_image_url:  GPN.byId('soc_wa_img').value.trim(),
+          publish_date: GPN.byId('socDate').value,
+          publish_time: GPN.byId('socTime').value
+        };
+        if (!payload.post_title) { err.textContent = 'Title required.'; err.hidden = false; return; }
+        if (!payload.publish_date || !payload.publish_time) { err.textContent = 'Date and time required.'; err.hidden = false; return; }
+        var anyCap = payload.fb_caption || payload.instagram_caption || payload.threads_caption ||
+                     payload.pinterest_caption || payload.whatsapp_caption;
+        if (!anyCap) { err.textContent = 'At least one platform caption required.'; err.hidden = false; return; }
+
+        var btn = GPN.byId('socSave');
+        GPN.setLoading(btn, true, 'Adding…');
+        GPN.api('adminAutoSocialAdd', payload).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Added: ' + (r.data.Post_ID || ''));
+          closeModal(); render('social');
+        });
+      });
+    });
+  }
+
+  /* ============================================================
+     LOGS
+     ============================================================ */
+  VIEWS.logs = function () {
+    return GPN.api('adminAutoLogs', { limit: 200 }).then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var rows = (j.data && j.data.logs) || [];
+
+      var html = '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h3 class="gpn-card-title">Automation Logs (' + rows.length + ')</h3>' +
+          '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnReloadLogs">Refresh</button>' +
+        '</div>';
+
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No logs yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr>' +
+            '<th>When</th><th>Workflow</th><th>Action</th><th>Status</th><th>Message</th>' +
+          '</tr></thead><tbody>';
+        rows.forEach(function (r) {
+          html += '<tr>' +
+            '<td data-label="When">' + esc(fmtDT(r.Timestamp)) + '</td>' +
+            '<td data-label="Workflow">' + esc(r.Workflow || '') + '</td>' +
+            '<td data-label="Action">' + esc(r.Action || '') + '</td>' +
+            '<td data-label="Status">' + pill(r.Status || '') + '</td>' +
+            '<td data-label="Message" class="wrap">' + esc(r.Message || r.Error || '—') + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnReloadLogs'), 'click', function () { render('logs'); });
+    });
+  };
+
+  /* ============================================================
+     HELPERS
+     ============================================================ */
+  function classSelect(id, value) {
+    var opts = (window.GPN_CONFIG.CLASSES || []).map(function (c) {
+      return '<option value="' + esc(c) + '"' + (value === c ? ' selected' : '') + '>' + esc(c) + '</option>';
+    }).join('');
+    return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
+  }
+
+})();
+</script>
+</body>
+</html>
