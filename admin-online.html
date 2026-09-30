@@ -35,6 +35,7 @@
     <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
     <a class="gpn-navstrip-btn active" href="admin-online.html">Online</a>
     <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-master.html">Master</a>
     <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
     <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
     <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
@@ -43,7 +44,6 @@
 
   <main class="gpn-main">
 
-    <!-- Sub-tabs (chips) -->
     <div class="gpn-chips" id="subTabs">
       <button class="gpn-chip active" data-view="overview">Overview</button>
       <button class="gpn-chip" data-view="students">Students</button>
@@ -67,8 +67,6 @@
   </main>
 </div>
 
-<!-- ============================================================ MODALS ============================================================ -->
-
 <div class="gpn-modal" id="modalGeneric" hidden>
   <div class="gpn-modal-card" id="modalGenericCard"></div>
 </div>
@@ -84,9 +82,6 @@
   var viewRoot = null;
   var appRoot  = null;
 
-  /* ==========================================================
-     BOOT
-     ========================================================== */
   GPN.ready(function () {
     appRoot  = GPN.byId('appRoot');
     viewRoot = GPN.byId('viewRoot');
@@ -94,7 +89,6 @@
     GPN.byId('userBadge').textContent = GPN.Session.getName() || 'Admin';
     GPN.byId('userBadge').title = GPN.Session.getUser() || '';
 
-    /* Sub-tab nav */
     GPN.$$('#subTabs .gpn-chip').forEach(function (btn) {
       GPN.on(btn, 'click', function () {
         GPN.$$('#subTabs .gpn-chip').forEach(function (b) { b.classList.remove('active'); });
@@ -107,14 +101,11 @@
       if (confirm('Sign out?')) GPN.Guard.logout();
     });
 
-    /* Modal wire */
     GPN.Modal.wire('modalGeneric');
 
-    /* Reveal */
     appRoot.hidden = false;
     GPN.byId('pageLoading').hidden = true;
 
-    /* Default view */
     render('overview');
   });
 
@@ -127,7 +118,6 @@
     });
   }
 
-  /* Open a modal with given HTML body and optional setup callback */
   function openModal(html, onReady) {
     var card = GPN.byId('modalGenericCard');
     card.innerHTML = html;
@@ -136,7 +126,6 @@
   }
   function closeModal() { GPN.Modal.close('modalGeneric'); }
 
-  /* Common data caches */
   var cacheProgrammes = null;
   var cacheSubjects = null;
   var cacheChapters = null;
@@ -166,7 +155,6 @@
     cacheProgrammes = null; cacheSubjects = null; cacheChapters = null;
   }
 
-  /* Shortcut render helpers */
   function esc(s) { return GPN.esc(s); }
   function fmtDate(d) { return GPN.formatDate(d); }
   function fmtDT(d) { return GPN.formatDateTime(d); }
@@ -179,9 +167,6 @@
 
   var VIEWS = {};
 
-  /* ============================================================
-     VIEW: OVERVIEW
-     ============================================================ */
   VIEWS.overview = function () {
     return GPN.api('adminOnlineOverview').then(function (j) {
       if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
@@ -210,9 +195,6 @@
     return '<div class="gpn-stat"><span class="gpn-stat-label">' + esc(label) + '</span><span class="gpn-stat-value ' + (tone || '') + '">' + esc(String(value)) + '</span></div>';
   }
 
-  /* ============================================================
-     VIEW: STUDENTS
-     ============================================================ */
   VIEWS.students = function () {
     return GPN.api('adminListStudents').then(function (j) {
       if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
@@ -290,7 +272,7 @@
   function addStudentModal() {
     var html =
       '<h3 class="gpn-modal-title">Add Online Student</h3>' +
-      '<p class="gpn-modal-sub">ID format: ol-&lt;firstname&gt;&lt;serial&gt; (e.g. ol-arnav042)</p>' +
+      '<p class="gpn-modal-sub">ID format: ol-&lt;firstname&gt;&lt;serial&gt;. Password defaults to phone digits.</p>' +
       '<div class="gpn-field"><label class="gpn-label">Student ID</label><input id="nsId" class="gpn-input" placeholder="ol-arnav042"></div>' +
       '<div class="gpn-field"><label class="gpn-label">Name</label><input id="nsName" class="gpn-input"></div>' +
       '<div class="gpn-grid-2">' +
@@ -298,40 +280,81 @@
         '<div class="gpn-field"><label class="gpn-label">Board</label>' + boardSelect('nsBoard') + '</div>' +
       '</div>' +
       '<div class="gpn-grid-2">' +
-        '<div class="gpn-field"><label class="gpn-label">Phone</label><input id="nsPhone" class="gpn-input" inputmode="tel"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Phone</label><input id="nsPhone" class="gpn-input" inputmode="tel"><span class="gpn-hint">This becomes the default password.</span></div>' +
         '<div class="gpn-field"><label class="gpn-label">WhatsApp</label><input id="nsWa" class="gpn-input" inputmode="tel" placeholder="Defaults to phone"></div>' +
       '</div>' +
       '<div class="gpn-field"><label class="gpn-label">Email</label><input id="nsEmail" class="gpn-input" inputmode="email"></div>' +
       '<div class="gpn-field"><label class="gpn-label">School</label><input id="nsSchool" class="gpn-input"></div>' +
-      '<div class="gpn-field"><label class="gpn-label">Parent Name</label><input id="nsParent" class="gpn-input"></div>' +
-      '<div class="gpn-field"><label class="gpn-label">Password (min 10)</label><input id="nsPass" class="gpn-input" type="password"></div>' +
-      '<div id="nsError" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Parent Name</label><input id="nsParent" class="gpn-input" placeholder="Optional"></div>' +
+
+      '<div class="gpn-card" style="margin-top:14px;"><div class="gpn-card-head"><h3 class="gpn-card-title">Parent Account</h3></div>' +
+      '<div class="gpn-card-body">' +
+        '<div class="gpn-field"><label class="gpn-check"><input type="checkbox" id="nsCreateParent"> <span>Also create a parent login for this student</span></label></div>' +
+        '<div id="nsParentFields" style="display:none;margin-top:12px;">' +
+          '<div class="gpn-field"><label class="gpn-label">Parent Name</label><input id="nsParentName" class="gpn-input" placeholder="Auto-filled from student parent name if blank"></div>' +
+          '<div class="gpn-grid-2">' +
+            '<div class="gpn-field"><label class="gpn-label">Parent Phone</label><input id="nsParentPhone" class="gpn-input" inputmode="tel" placeholder="Defaults to student phone"><span class="gpn-hint">Becomes the parent\'s default password.</span></div>' +
+            '<div class="gpn-field"><label class="gpn-label">Parent Email</label><input id="nsParentEmail" class="gpn-input" inputmode="email" placeholder="Optional"></div>' +
+          '</div>' +
+          '<div class="gpn-quiet" style="font-size:0.75rem;">Parent will get a pr- ID and default password = parent phone digits.</div>' +
+        '</div>' +
+      '</div></div>' +
+
+      '<div id="nsError" class="gpn-alert gpn-alert-error" hidden style="margin-top:12px;"></div>' +
       '<div class="gpn-modal-actions">' +
         '<button class="gpn-btn gpn-btn-ghost" id="nsCancel">Cancel</button>' +
         '<button class="gpn-btn gpn-btn-cyan" id="nsSave">Create</button>' +
       '</div>';
 
     openModal(html, function () {
+      var cb = GPN.byId('nsCreateParent');
+      var fields = GPN.byId('nsParentFields');
+      GPN.on(cb, 'change', function () {
+        fields.style.display = cb.checked ? '' : 'none';
+        if (cb.checked) {
+          var pn = GPN.byId('nsParentName');
+          var pp = GPN.byId('nsParentPhone');
+          if (!pn.value) pn.value = GPN.byId('nsParent').value.trim();
+          if (!pp.value) pp.value = GPN.byId('nsPhone').value.trim();
+        }
+      });
+
       GPN.on(GPN.byId('nsCancel'), 'click', closeModal);
       GPN.on(GPN.byId('nsSave'), 'click', function () {
         var err = GPN.byId('nsError');
         err.hidden = true;
+
+        var phone = GPN.byId('nsPhone').value.trim();
+        if (!phone) { err.textContent = 'Phone required (used as default password).'; err.hidden = false; return; }
+
+        var wantParent = cb.checked;
+        var pName = GPN.byId('nsParentName').value.trim();
+        var pPhone = GPN.byId('nsParentPhone').value.trim();
+        var pEmail = GPN.byId('nsParentEmail').value.trim();
+
+        if (wantParent && !pPhone) {
+          err.textContent = 'Parent phone required (used as parent default password).';
+          err.hidden = false; return;
+        }
 
         var payload = {
           StudentID: GPN.byId('nsId').value.trim().toLowerCase(),
           Name: GPN.byId('nsName').value.trim(),
           Class: GPN.byId('nsClass').value,
           Board: GPN.byId('nsBoard').value,
-          Phone: GPN.byId('nsPhone').value.trim(),
+          Phone: phone,
           WhatsApp: GPN.byId('nsWa').value.trim(),
           Email: GPN.byId('nsEmail').value.trim(),
           School: GPN.byId('nsSchool').value.trim(),
           ParentName: GPN.byId('nsParent').value.trim(),
-          Password: GPN.byId('nsPass').value
+          AlsoCreateParent: wantParent,
+          ParentName: pName || GPN.byId('nsParent').value.trim(),
+          ParentPhone: pPhone,
+          ParentEmail: pEmail
         };
 
-        if (!payload.StudentID || !payload.Name || !payload.Password) {
-          err.textContent = 'ID, Name, Password required.';
+        if (!payload.StudentID || !payload.Name) {
+          err.textContent = 'ID and Name required.';
           err.hidden = false;
           return;
         }
@@ -346,7 +369,12 @@
         GPN.api('adminCreateStudent', payload).then(function (r) {
           GPN.setLoading(btn, false);
           if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
-          GPN.Toast.ok('Student created.');
+
+          var msg = 'Student: ' + r.data.StudentID + ' · PW: ' + r.data.DefaultPassword;
+          if (r.data.Parent && r.data.Parent.ParentID) {
+            msg += ' · Parent: ' + r.data.Parent.ParentID + ' · PW: ' + r.data.Parent.DefaultPassword;
+          }
+          GPN.Toast.ok(msg);
           closeModal();
           render('students');
         });
@@ -555,9 +583,6 @@
     });
   }
 
-  /* ============================================================
-     VIEW: PROGRAMMES
-     ============================================================ */
   VIEWS.programmes = function () {
     return loadProgrammes(true).then(function (progs) {
       var html = '';
@@ -682,9 +707,6 @@
     });
   }
 
-  /* ============================================================
-     VIEW: SUBJECTS
-     ============================================================ */
   VIEWS.subjects = function () {
     return loadSubjects(true).then(function (subs) {
       var html =
@@ -737,9 +759,6 @@
     });
   };
 
-  /* ============================================================
-     VIEW: CHAPTERS
-     ============================================================ */
   VIEWS.chapters = function () {
     return Promise.all([loadChapters(true), loadSubjects()]).then(function (res) {
       var chapters = res[0], subjects = res[1];
@@ -792,9 +811,6 @@
     });
   };
 
-  /* ============================================================
-     VIEW: ENROLMENTS
-     ============================================================ */
   VIEWS.enrolments = function () {
     return Promise.all([
       GPN.api('adminListEnrolments'),
@@ -874,9 +890,6 @@
     });
   };
 
-  /* ============================================================
-     VIEW: MATERIALS
-     ============================================================ */
   VIEWS.materials = function () {
     return Promise.all([GPN.api('adminListMaterials'), loadSubjects(), loadChapters()]).then(function (res) {
       var mats = (res[0].ok && res[0].data && res[0].data.materials) || [];
@@ -957,9 +970,6 @@
     });
   };
 
-  /* ============================================================
-     VIEW: SCHEDULE
-     ============================================================ */
   VIEWS.schedule = function () {
     return Promise.all([
       GPN.api('adminListSchedule'),
@@ -1046,9 +1056,6 @@
     });
   };
 
-  /* ============================================================
-     VIEW: TESTS
-     ============================================================ */
   VIEWS.tests = function () {
     return Promise.all([GPN.api('adminListTests'), loadSubjects(), loadChapters(), loadProgrammes()]).then(function (res) {
       var tests = (res[0].ok && res[0].data && res[0].data.tests) || [];
@@ -1139,7 +1146,6 @@
         '<h3 class="gpn-modal-title">' + esc(t.Title) + '</h3>' +
         '<p class="gpn-modal-sub">' + esc(t.TestID) + ' · ' + status + ' · ' + t.TotalMarks + ' marks · ' + t.Duration + ' min · ' + fmtCur(t.Price || 0) + '</p>';
 
-      /* Form section */
       html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Google Form</h3></div><div class="gpn-card-body">';
       if (t.FormID) {
         html += '<div class="gpn-quiet" style="margin-bottom:8px;">Linked. Form ID: <span class="gpn-mono">' + esc(t.FormID) + '</span></div>';
@@ -1152,7 +1158,6 @@
       }
       html += '</div></div>';
 
-      /* Lifecycle */
       var ALLOWED = { DRAFT: ['AVAILABLE'], AVAILABLE: ['CLOSED'], CLOSED: ['EVALUATED'], EVALUATED: ['PUBLISHED'], PUBLISHED: [] };
       var nexts = ALLOWED[status] || [];
       html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Lifecycle</h3></div><div class="gpn-card-body">';
@@ -1163,14 +1168,12 @@
       }
       html += '</div></div>';
 
-      /* Sync + Publish */
       html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Sync &amp; Publish</h3></div><div class="gpn-card-body">' +
         '<div class="gpn-row">' +
         '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" id="tfSync">Sync Submissions</button>' +
         '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="tfPublish">Publish Evaluated</button>' +
         '</div></div></div>';
 
-      /* Attempts */
       html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Attempts (' + attempts.length + ')</h3></div>';
       if (!attempts.length) {
         html += '<div class="gpn-card-body"><div class="gpn-empty-state">No attempts yet.</div></div>';
@@ -1189,7 +1192,6 @@
       }
       html += '</div>';
 
-      /* Results */
       html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Results (' + results.length + ')</h3></div>';
       if (!results.length) {
         html += '<div class="gpn-card-body"><div class="gpn-empty-state">No results yet.</div></div>';
@@ -1272,9 +1274,6 @@
     });
   }
 
-  /* ============================================================
-     VIEW: EVALUATIONS
-     ============================================================ */
   VIEWS.evaluations = function () {
     return GPN.api('adminListPendingEvaluations').then(function (j) {
       var items = (j.ok && j.data && j.data.items) || [];
@@ -1368,9 +1367,6 @@
     });
   }
 
-  /* ============================================================
-     VIEW: RESULTS
-     ============================================================ */
   VIEWS.results = function () {
     return GPN.api('adminListResults').then(function (j) {
       var rows = (j.ok && j.data && j.data.results) || [];
@@ -1405,9 +1401,6 @@
     });
   };
 
-  /* ============================================================
-     VIEW: PAYMENTS
-     ============================================================ */
   VIEWS.payments = function () {
     return Promise.all([GPN.api('adminListPayments'), GPN.api('adminListStudents'), loadProgrammes()]).then(function (res) {
       var pays = (res[0].ok && res[0].data && res[0].data.payments) || [];
@@ -1470,9 +1463,6 @@
     });
   };
 
-  /* ============================================================
-     VIEW: CONTENT (announcements, counters, socials)
-     ============================================================ */
   VIEWS.content = function () {
     return Promise.all([
       GPN.api('adminGetAnnouncement'),
@@ -1504,7 +1494,6 @@
 
       viewRoot.innerHTML = html;
 
-      /* Announcement save */
       GPN.on(GPN.byId('anSave'), 'click', function () {
         GPN.api('adminSetAnnouncement', {
           title: GPN.byId('anTitle').value,
@@ -1516,7 +1505,6 @@
         });
       });
 
-      /* Counters */
       var counters = ctr.map(function (c) { return Object.assign({}, c); });
       function renderCounters() {
         GPN.byId('ctrList').innerHTML = counters.map(function (c, i) {
@@ -1555,7 +1543,6 @@
         });
       });
 
-      /* Socials */
       var links = (soc.links || []).map(function (l) { return Object.assign({}, l); });
       function renderSocials() {
         GPN.byId('socList').innerHTML = links.map(function (l, i) {
@@ -1596,9 +1583,6 @@
     });
   };
 
-  /* ============================================================
-     SHARED SELECT HELPERS
-     ============================================================ */
   function classSelect(id, value) {
     var opts = (window.GPN_CONFIG.CLASSES || []).map(function (c) {
       return '<option value="' + esc(c) + '"' + (value === c ? ' selected' : '') + '>' + esc(c) + '</option>';
@@ -1608,6 +1592,14 @@
   function boardSelect(id, value) {
     var opts = (window.GPN_CONFIG.BOARDS || []).map(function (b) {
       return '<option value="' + esc(b) + '"' + (value === b ? ' selected' : '') + '>' + esc(b) + '</option>';
+    }).join('');
+    return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
+  }
+
+})();
+</script>
+</body>
+</html> b ? ' selected' : '') + '>' + esc(b) + '</option>';
     }).join('');
     return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
   }

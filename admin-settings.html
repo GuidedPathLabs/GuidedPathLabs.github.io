@@ -35,6 +35,7 @@
     <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
     <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
     <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-master.html">Master</a>
     <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
     <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
     <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
@@ -48,7 +49,6 @@
       <p class="gpn-admin-hero-sub">Account and system information.</p>
     </section>
 
-    <!-- ACCOUNT -->
     <div class="gpn-card">
       <div class="gpn-card-head">
         <h3 class="gpn-card-title">Your Account</h3>
@@ -77,7 +77,6 @@
       </div>
     </div>
 
-    <!-- SYSTEM INFO -->
     <div class="gpn-card">
       <div class="gpn-card-head">
         <h3 class="gpn-card-title">System Information</h3>
@@ -106,7 +105,6 @@
       </div>
     </div>
 
-    <!-- BACKUPS -->
     <div class="gpn-card">
       <div class="gpn-card-head">
         <h3 class="gpn-card-title">Backups</h3>
@@ -124,7 +122,6 @@
       </div>
     </div>
 
-    <!-- ABOUT -->
     <div class="gpn-card">
       <div class="gpn-card-head">
         <h3 class="gpn-card-title">About</h3>
@@ -150,7 +147,6 @@
   </main>
 </div>
 
-<!-- CHANGE PASSWORD MODAL -->
 <div class="gpn-modal" id="pwModal" hidden>
   <div class="gpn-modal-card">
     <h3 class="gpn-modal-title">Change Password</h3>
@@ -192,7 +188,6 @@
     GPN.byId('appRoot').hidden = false;
     GPN.byId('pageLoading').hidden = true;
 
-    /* Fill account info from session */
     var userId = GPN.Session.getUser() || '—';
     var name   = GPN.Session.getName() || userId;
     var role   = GPN.Session.getRole() || '—';
@@ -203,7 +198,6 @@
     GPN.byId('userBadge').textContent = name;
     GPN.byId('userBadge').title = userId;
 
-    /* Fetch 'me' to get session expiry + backend version */
     GPN.api('auth.me').then(function (j) {
       if (j && j.ok && j.data) {
         var u = j.data.user || {};
@@ -213,7 +207,6 @@
       }
     });
 
-    /* Fetch backend version via ping */
     GPN.api('ping', null, { skipToken: true }).then(function (j) {
       if (j && j.ok && j.data) {
         GPN.byId('sysBackend').textContent = j.data.version || '—';
@@ -221,19 +214,16 @@
       }
     });
 
-    /* System info from config */
     GPN.byId('sysApp').textContent     = GPN.cfg('APP_NAME', '—');
     GPN.byId('sysVersion').textContent = GPN.cfg('VERSION', '—');
     GPN.byId('sysSite').href           = GPN.cfg('WEBSITE', '#');
 
-    /* Logout (both buttons) */
     function confirmLogout() {
       if (confirm('Sign out of GPN Central?')) GPN.Guard.logout();
     }
     GPN.on(GPN.byId('btnLogout'), 'click', confirmLogout);
     GPN.on(GPN.byId('btnLogout2'), 'click', confirmLogout);
 
-    /* Change password modal */
     GPN.Modal.wire('pwModal');
 
     GPN.on(GPN.byId('btnChangePw'), 'click', function () {
@@ -277,9 +267,27 @@
         return;
       }
 
-      /* New token issued by backend */
       GPN.Session.save(json.data || {});
       GPN.Toast.ok('Password updated. Please sign in again.');
+      GPN.Modal.close('pwModal');
+
+      setTimeout(function () {
+        GPN.Session.clear();
+        window.location.href = 'login.html';
+      }, 1400);
+    });
+  }
+
+  function showError(msg) {
+    var el = GPN.byId('pwAlert');
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+})();
+</script>
+</body>
+</html> in again.');
       GPN.Modal.close('pwModal');
 
       setTimeout(function () {

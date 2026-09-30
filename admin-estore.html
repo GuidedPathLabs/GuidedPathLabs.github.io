@@ -35,6 +35,7 @@
     <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
     <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
     <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-master.html">Master</a>
     <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
     <a class="gpn-navstrip-btn active" href="admin-estore.html">E-Store</a>
     <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
@@ -136,9 +137,6 @@
 
   var VIEWS = {};
 
-  /* ============================================================
-     OVERVIEW
-     ============================================================ */
   VIEWS.overview = function () {
     return GPN.api('adminEstoreStats').then(function (j) {
       if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
@@ -188,9 +186,6 @@
     });
   };
 
-  /* ============================================================
-     PRODUCTS (with inner type chips)
-     ============================================================ */
   VIEWS.products = function () {
     var types = ['Booklet', 'Test Pack', 'Material Pack', 'Course'];
 
@@ -371,9 +366,6 @@
     });
   }
 
-  /* ============================================================
-     ORDERS
-     ============================================================ */
   VIEWS.orders = function () {
     return GPN.api('adminEstoreOrderList').then(function (j) {
       if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
@@ -483,9 +475,6 @@
     });
   }
 
-  /* ============================================================
-     COUPONS
-     ============================================================ */
   VIEWS.coupons = function () {
     return GPN.api('adminEstoreCouponList').then(function (j) {
       if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
@@ -592,9 +581,6 @@
     });
   }
 
-  /* ============================================================
-     REFERRALS
-     ============================================================ */
   VIEWS.referrals = function () {
     return GPN.api('adminEstoreReferralList').then(function (j) {
       if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
@@ -674,6 +660,25 @@
           ReferrerName: GPN.byId('rfName').value.trim(),
           ReferrerCode: GPN.byId('rfCode').value.trim().toUpperCase(),
           RewardType:   GPN.byId('rfType').value,
+          RewardValue:  GPN.byId('rfValue').value,
+          Notes:        GPN.byId('rfNotes').value.trim()
+        };
+        if (!payload.ReferrerName || !payload.ReferrerCode) { err.textContent = 'Name and Code required.'; err.hidden = false; return; }
+        var btn = GPN.byId('rfSave');
+        GPN.setLoading(btn, true, 'Creating…');
+        GPN.api('adminEstoreReferralCreate', payload).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Referral created.'); closeModal(); render('referrals');
+        });
+      });
+    });
+  }
+
+})();
+</script>
+</body>
+</html>ue,
           RewardValue:  GPN.byId('rfValue').value,
           Notes:        GPN.byId('rfNotes').value.trim()
         };

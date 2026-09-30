@@ -1,1 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Parent View — Guided Path Noida</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body>
 
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <!-- ============================================================
+       TOPBAR
+       ============================================================ -->
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">Parent <b>View</b></div>
+    </div>
+    <div class="gpn-topbar-user">
+      <span class="gpn-user-badge" id="userBadge">—</span>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnChangePw" type="button">Password</button>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnLogout" type="button">Logout</button>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       STUDENT SELECTOR (only if >1 linked student)
+       ============================================================ -->
+  <nav class="gpn-navstrip" id="studentStrip" hidden></nav>
+
+  <!-- ============================================================
+       MAIN
+       ============================================================ -->
+  <main class="gpn-main" id="viewRoot">
+    <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+  </main>
+
+</div>
+
+<!-- ============================================================
+     CHANGE PASSWORD MODAL
+     ============================================================ -->
+<div class="gpn-modal" id="pwModal" hidden>
+  <div class="gpn-modal-card">
+    <h3 class="gpn-modal-title">Change Password</h3>
+    <p class="gpn-modal-sub" id="pwSubtitle">Choose a strong password of at least 10 characters.</p>
+
+    <form id="pwForm" novalidate>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwCurrent">Current Password</label>
+        <input id="pwCurrent" type="password" class="gpn-input" autocomplete="current-password" required>
+      </div>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwNew">New Password</label>
+        <input id="pwNew" type="password" class="gpn-input" autocomplete="new-password" minlength="10" required>
+      </div>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwConfirm">Confirm New Password</label>
+        <input id="pwConfirm" type="password" class="gpn-input" autocomplete="new-password" minlength="10" required>
+      </div>
+
+      <div id="pwAlert" class="gpn-alert gpn-alert-error" hidden></div>
+
+      <div class="gpn-modal-actions">
+        <button type="button" class="gpn-btn gpn-btn-ghost" id="pwCancel">Cancel</button>
+        <button type="submit" class="gpn-btn gpn-btn-cyan" id="pwSubmit">Update Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ==========================================================
+     GUARD
+     ========================================================== */
+  if (!GPN.Guard.requireParent()) return;
+
+  /* ==========================================================
+     STATE
+     ========================================================== */
+  var forcedChange = false;
+  var pwModalEl    = null;
+
+  var DATA = {
+    students: [],   // [{ StudentID, Name, Class, Module, Status }]
+    current:  '',   // currently selected student ID
+    cache:    {}    // { [studentId]: { dashboard, results, wallet, performance, fees, attendance, tests, _loaded } }
+  };
+
+  /* ==========================================================
+     BOOT
+     ========================================================== */
+  GPN.ready(function () {
+    pwModalEl = GPN.byId('pwModal');
+
+    GPN.byId('userBadge').textContent = GPN.Session.getName() || 'Parent';
+    GPN.byId('userBadge').title = GPN.Session.getUser() || '';
+
+    GPN.byId('appRoot').hidden = false;
+    GPN.byId('pageLoading').hidden = true;
+
+    /* Logout */
+    GPN.on(GPN.byId('btnLogout'), 'click', function () {
+      if (!confirm('Sign out of GPN Central?')) return;
+      GPN.Guard.logout();
+    });
+
+    /* Modal wiring — respects forcedChange */
+    GPN.on(pwModalEl, 'click', function (e) {
+      if (forcedChange) return;
+      if (e.target === pwModalEl) GPN.Modal.close('pwModal');
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || pwModalEl.hidden) return;
+      if (forcedChange) { e.preventDefault(); return; }
+      GPN.Modal.close('pwModal');
+    });
+
+    GPN.on(GPN.byId('pwCancel'), 'click', function () {
+      if (forcedChange) return;
+      GPN.Modal.close('pwModal');
+    });
+
+    GPN.on(GPN.byId('btnChangePw'), 'click', function () {
+      forcedChange = false;
+      openPwModal();
+    });
+
+    GPN.on(GPN.byId('pwForm'), 'submit', function (e) {
+      e.preventDefault();
+      handleChangePassword();
+    });
+
+    /* Forced-change detection */
+    var q = GPN.query();
+    if (String((q && q.mustChange) || '') === '1') {
+      enterForcedMode();
+    }
+
+    GPN.api('auth.me').then(function (j) {
+      if (j && j.ok && j.data && j.data.mustChange === true) {
+        enterForcedMode();
+      }
+    });
+
+    /* Load linked students */
+    loadStudents();
+  });
+
+
+  /* ==========================================================
+     FORCED-CHANGE FLOW
+     ========================================================== */
+  function enterForcedMode() {
+    if (forcedChange) return;
+    forcedChange = true;
+    GPN.byId('pwCancel').style.display = 'none';
+    GPN.byId('pwSubtitle').textContent =
+      'For security, please change your password to continue. Cancel is disabled until you set a new password.';
+    openPwModal();
+  }
+
+  function exitForcedMode() {
+    forcedChange = false;
+    GPN.byId('pwCancel').style.display = '';
+    GPN.byId('pwSubtitle').textContent =
+      'Choose a strong password of at least 10 characters.';
+  }
+
+  function openPwModal() {
+    GPN.byId('pwAlert').hidden = true;
+    GPN.byId('pwForm').reset();
+    GPN.Modal.open('pwModal');
+  }
+
+
+  /* ==========================================================
+     LOAD LINKED STUDENTS
+     ========================================================== */
+  function loadStudents() {
+    GPN.api('parentDashboard').then(function (j) {
+      if (!j || !j.ok) {
+        GPN.showContainerError(GPN.byId('viewRoot'), GPN.friendlyError(j));
+        return;
+      }
+      var list = (j.data && j.data.students) || [];
+      DATA.students = list;
+
+      if (!list.length) {
+        renderNoStudents();
+        return;
+      }
+
+      /* Build student selector if more than one */
+      if (list.length > 1) {
+        renderStudentStrip();
+      }
+
+      /* Select first by default */
+      selectStudent(list[0].StudentID);
+    });
+  }
+
+
+  /* ==========================================================
+     STUDENT SELECTOR STRIP
+     ========================================================== */
+  function renderStudentStrip() {
+    var strip = GPN.byId('studentStrip');
+    strip.hidden = false;
+    strip.innerHTML = DATA.students.map(function (s) {
+      return '<button class="gpn-navstrip-btn" data-student="' + GPN.esc(s.StudentID) + '" type="button">' +
+        GPN.esc(s.Name || s.StudentID) +
+      '</button>';
+    }).join('');
+
+    GPN.$$('#studentStrip .gpn-navstrip-btn').forEach(function (btn) {
+      GPN.on(btn, 'click', function () {
+        var sid = btn.dataset.student;
+        if (sid === DATA.current) return;
+        selectStudent(sid);
+      });
+    });
+  }
+
+  function markStripActive(studentId) {
+    GPN.$$('#studentStrip .gpn-navstrip-btn').forEach(function (b) {
+      if (b.dataset.student === studentId) b.classList.add('active');
+      else b.classList.remove('active');
+    });
+  }
+
+
+  /* ==========================================================
+     SELECT STUDENT + LOAD DATA
+     ========================================================== */
+  function selectStudent(studentId) {
+    DATA.current = studentId;
+    markStripActive(studentId);
+
+    var student = findStudent(studentId);
+    if (!student) {
+      GPN.showContainerError(GPN.byId('viewRoot'), 'Student not found.');
+      return;
+    }
+
+    /* If cached, render immediately */
+    var c = DATA.cache[studentId];
+    if (c && c._loaded) {
+      renderStudent();
+      return;
+    }
+
+    /* Load appropriate data based on module */
+    var module = String(student.Module || '').toLowerCase();
+    GPN.showContainerLoading(GPN.byId('viewRoot'), 'Loading ' + (student.Name || studentId) + '…');
+
+    var promises;
+    if (module === 'ol') {
+      promises = [
+        GPN.api('parentStudentDashboard',   { studentId: studentId }),
+        GPN.api('parentStudentResults',     { studentId: studentId }),
+        GPN.api('parentStudentWallet',      { studentId: studentId }),
+        GPN.api('parentStudentPerformance', { studentId: studentId })
+      ];
+    } else if (module === 'hq') {
+      promises = [
+        GPN.api('parentStudentDashboard',   { studentId: studentId }),
+        GPN.api('parentStudentFees',        { studentId: studentId }),
+        GPN.api('parentStudentAttendance',  { studentId: studentId }),
+        GPN.api('parentStudentTests',       { studentId: studentId }),
+        GPN.api('parentStudentPerformance', { studentId: studentId })
+      ];
+    } else {
+      promises = [Promise.resolve({ ok: false, error: 'UNKNOWN_MODULE' })];
+    }
+
+    Promise.all(promises).then(function (res) {
+      var entry = { _loaded: true };
+      if (module === 'ol') {
+        entry.dashboard   = (res[0] && res[0].ok) ? res[0].data : null;
+        entry.results     = (res[1] && res[1].ok) ? res[1].data : null;
+        entry.wallet      = (res[2] && res[2].ok) ? res[2].data : null;
+        entry.performance = (res[3] && res[3].ok) ? res[3].data : null;
+      } else if (module === 'hq') {
+        entry.dashboard   = (res[0] && res[0].ok) ? res[0].data : null;
+        entry.fees        = (res[1] && res[1].ok) ? res[1].data : null;
+        entry.attendance  = (res[2] && res[2].ok) ? res[2].data : null;
+        entry.tests       = (res[3] && res[3].ok) ? res[3].data : null;
+        entry.performance = (res[4] && res[4].ok) ? res[4].data : null;
+      }
+      DATA.cache[studentId] = entry;
+      renderStudent();
+    }).catch(function (err) {
+      console.error('Load failed:', err);
+      GPN.showContainerError(GPN.byId('viewRoot'), 'Failed to load student data. Please refresh.');
+    });
+  }
+
+  function findStudent(id) {
+    for (var i = 0; i < DATA.students.length; i++) {
+      if (String(DATA.students[i].StudentID) === String(id)) return DATA.students[i];
+    }
+    return null;
+  }
+
+
+  /* ==========================================================
+     RENDER DISPATCHER
+     ========================================================== */
+  function renderStudent() {
+    var student = findStudent(DATA.current);
+    if (!student) { renderNoStudents(); return; }
+
+    var module = String(student.Module || '').toLowerCase();
+    var cache  = DATA.cache[DATA.current] || {};
+
+    var html = '';
+    html += renderWelcome(student);
+
+    if (module === 'ol') {
+      html += renderOnlineView(cache);
+    } else if (module === 'hq') {
+      html += renderOfflineView(cache);
+    } else {
+      html += renderUnknownModule(student);
+    }
+
+    html += renderFooter();
+    GPN.byId('viewRoot').innerHTML = html;
+  }
+
+
+  /* ==========================================================
+     NO STUDENTS / UNKNOWN MODULE
+     ========================================================== */
+  function renderNoStudents() {
+    var wa = GPN.cfg('WHATSAPP', 'https://wa.me/guidedpathnoida');
+    GPN.byId('viewRoot').innerHTML =
+      '<div class="gpn-admin-hero">' +
+        '<h1 class="gpn-admin-hero-title">No Students Linked</h1>' +
+        '<p class="gpn-admin-hero-sub">Your parent account is not linked to any student yet.</p>' +
+      '</div>' +
+      '<div class="gpn-card"><div class="gpn-card-body">' +
+        '<p style="color:var(--tx-dim);line-height:1.7;margin-bottom:16px;">' +
+          'Please contact us on WhatsApp to link your account to your child\'s record.' +
+        '</p>' +
+        '<a class="gpn-btn gpn-btn-primary" href="' + GPN.esc(wa) + '" target="_blank" rel="noopener">Contact us on WhatsApp</a>' +
+      '</div></div>' +
+      renderFooter();
+  }
+
+  function renderUnknownModule(student) {
+    return '<div class="gpn-card"><div class="gpn-card-body">' +
+      '<div class="gpn-alert gpn-alert-warn">' +
+        'This student (' + GPN.esc(student.StudentID) + ') is registered with an unrecognized module: <b>' +
+        GPN.esc(student.Module || '(empty)') + '</b>. Please contact us to fix this.' +
+      '</div>' +
+    '</div></div>';
+  }
+
+
+  /* ==========================================================
+     WELCOME / FOOTER
+     ========================================================== */
+  function renderWelcome(student) {
+    var sub = GPN.esc(student.StudentID || '');
+    if (student.Class)  sub += ' · ' + GPN.esc(student.Class);
+    if (student.Status) sub += ' · <span class="gpn-pill ' + GPN.esc(String(student.Status).toLowerCase()) + '">' + GPN.esc(student.Status) + '</span>';
+
+    return '<section class="gpn-welcome">' +
+      '<h1 class="gpn-welcome-title">Viewing: ' + GPN.esc(student.Name || student.StudentID) + '</h1>' +
+      '<p class="gpn-welcome-sub">' + sub + '</p>' +
+    '</section>';
+  }
+
+  function renderFooter() {
+    return '<footer class="gpn-footer">' +
+      '<div>Guided Path Noida · Parent View</div>' +
+      '<div style="margin-top:6px;">' +
+        '<a href="https://guidedpathnoida.in" target="_blank" rel="noopener">guidedpathnoida.in</a> · ' +
+        '<a href="https://wa.me/guidedpathnoida" target="_blank" rel="noopener">WhatsApp</a>' +
+      '</div>' +
+    '</footer>';
+  }
+
+
+  /* ==========================================================
+     ONLINE VIEW (read-only)
+     ========================================================== */
+  function renderOnlineView(c) {
+    var d = c.dashboard;
+    if (!d) {
+      return '<div class="gpn-card"><div class="gpn-card-body"><div class="gpn-empty-state">No data available for this student yet.</div></div></div>';
+    }
+
+    var s = d.student || {};
+    var html = '';
+
+    /* Stat cards */
+    html += '<div class="gpn-stats">' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Wallet Balance</span><span class="gpn-stat-value gold">' + GPN.formatCurrency(d.walletBalance || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Tests Taken</span><span class="gpn-stat-value">' + ((d.summary && d.summary.tests) || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Average Score</span><span class="gpn-stat-value cyan">' + GPN.formatPercent((d.summary && d.summary.avg) || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Access</span><span class="gpn-stat-value">' + GPN.esc(d.access || '—') + '</span></div>' +
+    '</div>';
+
+    /* Next test */
+    if (d.nextTest) {
+      var nt = d.nextTest;
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Upcoming Test</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div class="gpn-strong" style="color:var(--cyan-bright);font-family:var(--font-serif);font-size:1rem;">' + GPN.esc(nt.Type || 'Test') + '</div>' +
+          '<div class="gpn-quiet" style="margin-top:6px;">' +
+            GPN.esc(GPN.formatDate(nt.Date)) +
+            (nt.StartTime ? ' · ' + GPN.esc(nt.StartTime) : '') +
+            (nt.EndTime ? ' – ' + GPN.esc(nt.EndTime) : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Results section */
+    if (c.results && c.results.results && c.results.results.length) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Test Results</h2>' +
+        '<div class="gpn-card"><div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Test</th><th>Subject</th><th>Score</th><th>%</th><th>Date</th></tr></thead><tbody>' +
+            c.results.results.map(function (r) {
+              return '<tr>' +
+                '<td data-label="Test">' + GPN.esc(r.TestTitle || r.TestID || '') + '</td>' +
+                '<td data-label="Subject">' + GPN.esc(r.SubjectName || r.SubjectID || '—') + '</td>' +
+                '<td data-label="Score">' + GPN.esc(r.MarksObtained) + ' / ' + GPN.esc(r.MaxMarks) + '</td>' +
+                '<td data-label="%" style="color:var(--gold);font-weight:700;">' + GPN.esc(r.Percentage) + '</td>' +
+                '<td data-label="Date">' + GPN.esc(GPN.formatDate(r.PublishedDate || r.TestDate)) + '</td>' +
+              '</tr>';
+            }).join('') +
+          '</tbody></table>' +
+        '</div></div>' +
+      '</section>';
+    }
+
+    /* Wallet history */
+    if (c.wallet && c.wallet.history && c.wallet.history.length) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Wallet Activity</h2>' +
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Balance: ' + GPN.formatCurrency(c.wallet.balance || 0) + '</h3></div>' +
+        '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Balance</th></tr></thead><tbody>' +
+            c.wallet.history.map(function (h) {
+              var amt = Number(h.Amount || 0);
+              return '<tr>' +
+                '<td data-label="Date">' + GPN.esc(GPN.formatDateTime(h.EntryDate)) + '</td>' +
+                '<td data-label="Type">' + GPN.esc(h.Type || '') + '</td>' +
+                '<td data-label="Amount" style="color:' + (amt >= 0 ? 'var(--success)' : 'var(--error)') + ';font-weight:700;">' + (amt >= 0 ? '+' : '') + GPN.formatCurrency(amt) + '</td>' +
+                '<td data-label="Balance">' + GPN.formatCurrency(h.BalanceAfter || 0) + '</td>' +
+              '</tr>';
+            }).join('') +
+          '</tbody></table>' +
+        '</div></div>' +
+      '</section>';
+    }
+
+    /* Performance */
+    if (c.performance) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Performance</h2>' +
+        renderPerformanceBlock(c.performance) +
+      '</section>';
+    }
+
+    /* Remarks */
+    if (d.remarks && d.remarks.length) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Teacher Remarks</h3></div>' +
+        '<div class="gpn-card-body">' +
+          d.remarks.map(function (r) {
+            return '<div style="padding:8px 0;border-bottom:1px solid var(--border-hair);">' +
+              '<div>' + GPN.esc(r.Text || '') + '</div>' +
+              '<div class="gpn-quiet" style="margin-top:4px;font-size:0.72rem;">' + GPN.esc(GPN.formatDateTime(r.CreatedDate)) + '</div>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+    }
+
+    return html;
+  }
+
+
+  /* ==========================================================
+     OFFLINE VIEW (read-only)
+     ========================================================== */
+  function renderOfflineView(c) {
+    var d = c.dashboard;
+    if (!d) {
+      return '<div class="gpn-card"><div class="gpn-card-body"><div class="gpn-empty-state">No data available for this student yet.</div></div></div>';
+    }
+
+    var s = d.student || {};
+    var fees = d.fees || {};
+    var perf = d.performance || {};
+    var html = '';
+
+    /* Stat cards */
+    var feesStatus = String(fees.status || 'No Data');
+    var feesTone = feesStatus.toLowerCase().replace(/\s/g, '-');
+    var attCur = (d.attendance && d.attendance.current) || { percent: 0 };
+    var rankDisplay = d.rank ? ('#' + d.rank) : '—';
+
+    html += '<div class="gpn-stats">' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Fees Status</span><span class="gpn-stat-value ' + GPN.esc(feesTone) + '">' + GPN.esc(feesStatus) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Attendance</span><span class="gpn-stat-value cyan">' + GPN.formatPercent(attCur.percent || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Overall Avg</span><span class="gpn-stat-value gold">' + GPN.formatPercent(perf.overallAvg || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Rank</span><span class="gpn-stat-value ' + (d.rank === 1 ? 'gold' : '') + '">' + GPN.esc(rankDisplay) + '</span></div>' +
+    '</div>';
+
+    /* Current fee cycle */
+    if (fees.currentCycle) {
+      var cc = fees.currentCycle;
+      var dueAmt = Number(fees.due || 0);
+      var daysLate = Number(fees.daysLate || 0);
+
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Current Fee Cycle</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span class="gpn-quiet">Cycle</span><span class="gpn-strong" style="color:var(--cyan-bright);">' + GPN.esc(cc.cycleLabel || '') + '</span></div>' +
+          '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span class="gpn-quiet">Period</span><span>' + GPN.esc(GPN.formatDate(cc.cycleStart)) + ' → ' + GPN.esc(GPN.formatDate(cc.cycleEnd)) + '</span></div>' +
+          '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span class="gpn-quiet">Deadline</span><span>' + GPN.esc(GPN.formatDate(cc.deadline)) + '</span></div>' +
+          '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span class="gpn-quiet">Amount</span><span style="color:var(--gold);font-weight:700;">' + GPN.formatCurrency(cc.feeAmount || 0) + '</span></div>' +
+          '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span class="gpn-quiet">Status</span><span class="gpn-pill ' + GPN.esc(feesTone) + '">' + GPN.esc(feesStatus) + '</span></div>' +
+          (dueAmt > 0 ? '<div class="gpn-row-between" style="padding:6px 0;"><span class="gpn-quiet">Total Due</span><span style="color:var(--error);font-weight:700;">' + GPN.formatCurrency(dueAmt) + '</span></div>' : '') +
+          (daysLate > 0 ? '<div class="gpn-alert gpn-alert-warn" style="margin-top:10px;"><b>' + GPN.esc(String(daysLate)) + ' day(s) overdue.</b> Please clear the dues.</div>' : '') +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Batches */
+    if (d.batches && d.batches.length) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Batches</h3></div>' +
+        '<div class="gpn-card-body">' +
+          d.batches.map(function (b) {
+            return '<div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">' +
+              '<div>' +
+                '<div class="gpn-strong" style="color:var(--cyan-bright);">' + GPN.esc(b.name || '') + '</div>' +
+                '<div class="gpn-quiet">' + GPN.esc(b.startTime || '') + (b.endTime ? ' – ' + GPN.esc(b.endTime) : '') + (b.days ? ' · ' + GPN.esc(b.days) : '') + '</div>' +
+              '</div>' +
+              '<span class="gpn-pill info">Active</span>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Attendance */
+    if (c.attendance) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Attendance</h2>' +
+        renderAttendanceBlock(c.attendance) +
+      '</section>';
+    }
+
+    /* Test scores */
+    if (c.tests && c.tests.tests && c.tests.tests.length) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Test Scores</h2>' +
+        renderTestsBlock(c.tests.tests) +
+      '</section>';
+    }
+
+    /* Fee cycles */
+    if (c.fees && c.fees.cycles && c.fees.cycles.length) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Fee Cycles</h2>' +
+        renderFeeCyclesBlock(c.fees.cycles) +
+      '</section>';
+    }
+
+    /* Progress report (bilingual) */
+    if (d.progressReport) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Progress Report</h2>' +
+        renderProgressReport(d.progressReport) +
+      '</section>';
+    }
+
+    /* Badges */
+    if (d.badges && d.badges.length) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Badges</h3></div>' +
+        '<div class="gpn-card-body" style="display:flex;flex-wrap:wrap;gap:8px;">' +
+          d.badges.map(function (b) { return '<span class="gpn-pill gold">' + GPN.esc(b) + '</span>'; }).join('') +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Remark */
+    if (d.remark) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Teacher Remark</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div style="line-height:1.7;">' + GPN.esc(d.remark) + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    return html;
+  }
+
+
+  /* ==========================================================
+     SHARED BLOCKS
+     ========================================================== */
+  function renderPerformanceBlock(p) {
+    var s = p.summary || {};
+    var html = '<div class="gpn-stats">' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Average</span><span class="gpn-stat-value cyan">' + GPN.formatPercent(s.avg || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Highest</span><span class="gpn-stat-value green">' + GPN.formatPercent(s.highest || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Lowest</span><span class="gpn-stat-value warn">' + GPN.formatPercent(s.lowest || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Tests</span><span class="gpn-stat-value">' + (s.tests || 0) + '</span></div>' +
+    '</div>';
+
+    if (p.bySubject && p.bySubject.length) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">By Subject</h3></div>' +
+        '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Subject</th><th>Avg %</th><th>Tests</th></tr></thead><tbody>' +
+            p.bySubject.map(function (x) {
+              return '<tr>' +
+                '<td data-label="Subject">' + GPN.esc(x.name) + '</td>' +
+                '<td data-label="Avg %" style="color:var(--gold);font-weight:700;">' + GPN.formatPercent(x.avg || 0) + '</td>' +
+                '<td data-label="Tests">' + (x.tests || 0) + '</td>' +
+              '</tr>';
+            }).join('') +
+          '</tbody></table>' +
+        '</div>' +
+      '</div>';
+    }
+
+    return html;
+  }
+
+  function renderAttendanceBlock(a) {
+    var cur = a.current || { present: 0, absent: 0, total: 0, percent: 0 };
+    var byMonth = a.byMonth || {};
+    var monthKeys = Object.keys(byMonth).sort().reverse();
+
+    var html = '<div class="gpn-card">' +
+      '<div class="gpn-card-head"><h3 class="gpn-card-title">This Month</h3></div>' +
+      '<div class="gpn-card-body">' +
+        '<div class="gpn-stats" style="margin-bottom:0;">' +
+          '<div class="gpn-stat"><span class="gpn-stat-label">Present</span><span class="gpn-stat-value green">' + (cur.present || 0) + '</span></div>' +
+          '<div class="gpn-stat"><span class="gpn-stat-label">Absent</span><span class="gpn-stat-value error">' + (cur.absent || 0) + '</span></div>' +
+          '<div class="gpn-stat"><span class="gpn-stat-label">Total Days</span><span class="gpn-stat-value">' + (cur.total || 0) + '</span></div>' +
+          '<div class="gpn-stat"><span class="gpn-stat-label">Percent</span><span class="gpn-stat-value cyan">' + GPN.formatPercent(cur.percent || 0) + '</span></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+    if (monthKeys.length) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Monthly History</h3></div>' +
+        '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Month</th><th>Present</th><th>Absent</th><th>Total</th><th>%</th></tr></thead><tbody>' +
+            monthKeys.map(function (k) {
+              var m = byMonth[k];
+              return '<tr>' +
+                '<td data-label="Month">' + GPN.esc(k) + '</td>' +
+                '<td data-label="Present">' + (m.present || 0) + '</td>' +
+                '<td data-label="Absent">' + (m.absent || 0) + '</td>' +
+                '<td data-label="Total">' + (m.total || 0) + '</td>' +
+                '<td data-label="%" style="color:var(--gold);font-weight:700;">' + GPN.formatPercent(m.percent || 0) + '</td>' +
+              '</tr>';
+            }).join('') +
+          '</tbody></table>' +
+        '</div>' +
+      '</div>';
+    }
+
+    return html;
+  }
+
+  function renderTestsBlock(tests) {
+    /* Group by month */
+    var byMonth = {};
+    tests.forEach(function (x) {
+      var m = x.MonthLabel || 'Unknown';
+      if (!byMonth[m]) byMonth[m] = [];
+      byMonth[m].push(x);
+    });
+
+    var monthKeys = Object.keys(byMonth);
+    var html = '';
+
+    monthKeys.forEach(function (m) {
+      var list = byMonth[m];
+      list.sort(function (a, b) {
+        var wa = ['M1','M2','M3','M4','Major'].indexOf(a.WeekLabel);
+        var wb = ['M1','M2','M3','M4','Major'].indexOf(b.WeekLabel);
+        return wa - wb;
+      });
+
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">' + GPN.esc(m) + '</h3></div>' +
+        '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Week</th><th>Type</th><th>Subject</th><th>Score</th><th>%</th><th>Date</th></tr></thead><tbody>' +
+            list.map(function (x) {
+              return '<tr>' +
+                '<td data-label="Week">' + GPN.esc(x.WeekLabel || '') + '</td>' +
+                '<td data-label="Type">' + GPN.esc(x.TestType || '') + '</td>' +
+                '<td data-label="Subject">' + GPN.esc(x.Subject || '—') + '</td>' +
+                '<td data-label="Score">' + GPN.esc(x.Score) + ' / ' + GPN.esc(x.Max) + '</td>' +
+                '<td data-label="%" style="color:var(--gold);font-weight:700;">' + GPN.esc(x.Percent) + '</td>' +
+                '<td data-label="Date">' + GPN.esc(GPN.formatDate(x.TestDate)) + '</td>' +
+              '</tr>';
+            }).join('') +
+          '</tbody></table>' +
+        '</div>' +
+      '</div>';
+    });
+
+    return html;
+  }
+
+  function renderFeeCyclesBlock(cycles) {
+    return '<div class="gpn-card"><div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+      '<table class="gpn-table"><thead><tr><th>Cycle</th><th>Start</th><th>End</th><th>Deadline</th><th>Amount</th><th>Status</th></tr></thead><tbody>' +
+        cycles.map(function (cy) {
+          return '<tr>' +
+            '<td data-label="Cycle">' + GPN.esc(cy.cycleLabel) + '</td>' +
+            '<td data-label="Start">' + GPN.esc(GPN.formatDate(cy.cycleStart)) + '</td>' +
+            '<td data-label="End">' + GPN.esc(GPN.formatDate(cy.cycleEnd)) + '</td>' +
+            '<td data-label="Deadline">' + GPN.esc(GPN.formatDate(cy.deadline)) + '</td>' +
+            '<td data-label="Amount">' + GPN.formatCurrency(cy.feeAmount || 0) + '</td>' +
+            '<td data-label="Status">' + '<span class="gpn-pill ' + GPN.esc(String(cy.status || '').toLowerCase().replace(/\s/g, '-')) + '">' + GPN.esc(cy.status || '') + '</span>' + '</td>' +
+          '</tr>';
+        }).join('') +
+      '</tbody></table>' +
+    '</div></div>';
+  }
+
+  function renderProgressReport(pr) {
+    if (!pr) return '';
+
+    var dirTone = 'info';
+    if (pr.overallDir === 'up')    dirTone = 'green';
+    if (pr.overallDir === 'down')  dirTone = 'error';
+    if (pr.overallDir === 'stable')dirTone = 'warn';
+    if (pr.overallDir === 'no_data') dirTone = 'draft';
+
+    var html = '<div class="gpn-card">' +
+      '<div class="gpn-card-body" style="padding:14px;border-left:3px solid var(--cyan);">' +
+        '<div class="gpn-pill ' + GPN.esc(dirTone) + '" style="margin-bottom:8px;">Overall</div>' +
+        '<div class="gpn-strong" style="color:var(--cyan-bright);line-height:1.5;">' + GPN.esc(pr.overallLabel || '—') + '</div>' +
+        '<div class="gpn-quiet" style="margin-top:6px;line-height:1.5;">' + GPN.esc(pr.overallLabelHindi || '') + '</div>' +
+      '</div>' +
+    '</div>';
+
+    var t = pr.testTrend || {};
+    html += '<div class="gpn-card">' +
+      '<div class="gpn-card-head"><h3 class="gpn-card-title">Test Performance</h3></div>' +
+      '<div class="gpn-card-body">' +
+        '<div class="gpn-strong" style="line-height:1.5;">' + GPN.esc(t.label || '—') + '</div>' +
+        '<div class="gpn-quiet" style="margin-top:6px;line-height:1.5;">' + GPN.esc(t.labelHindi || '') + '</div>' +
+      '</div>' +
+    '</div>';
+
+    var a = pr.attTrend || {};
+    html += '<div class="gpn-card">' +
+      '<div class="gpn-card-head"><h3 class="gpn-card-title">Attendance</h3></div>' +
+      '<div class="gpn-card-body">' +
+        '<div class="gpn-strong" style="line-height:1.5;">' + GPN.esc(a.label || '—') + '</div>' +
+        '<div class="gpn-quiet" style="margin-top:6px;line-height:1.5;">' + GPN.esc(a.labelHindi || '') + '</div>' +
+      '</div>' +
+    '</div>';
+
+    var f = pr.filesTrend || {};
+    html += '<div class="gpn-card">' +
+      '<div class="gpn-card-head"><h3 class="gpn-card-title">Study Files</h3></div>' +
+      '<div class="gpn-card-body">' +
+        '<div class="gpn-strong" style="line-height:1.5;">' + GPN.esc(f.label || '—') + '</div>' +
+        '<div class="gpn-quiet" style="margin-top:6px;line-height:1.5;">' + GPN.esc(f.labelHindi || '') + '</div>' +
+        (f.alert
+          ? '<div class="gpn-alert gpn-alert-warn" style="margin-top:10px;">' +
+              GPN.esc(f.alert) +
+              (f.alertHindi ? '<div class="gpn-quiet" style="margin-top:4px;">' + GPN.esc(f.alertHindi) + '</div>' : '') +
+            '</div>'
+          : '') +
+      '</div>' +
+    '</div>';
+
+    return html;
+  }
+
+
+  /* ==========================================================
+     CHANGE PASSWORD
+     ========================================================== */
+  function handleChangePassword() {
+    var alertBox = GPN.byId('pwAlert');
+    var btn      = GPN.byId('pwSubmit');
+    alertBox.hidden = true;
+
+    var current = GPN.byId('pwCurrent').value;
+    var next    = GPN.byId('pwNew').value;
+    var confirm = GPN.byId('pwConfirm').value;
+
+    if (!current || !next || !confirm) { showPwError('Please fill in all fields.'); return; }
+    if (next.length < 10) { showPwError('New password must be at least 10 characters.'); return; }
+    if (next !== confirm) { showPwError('New password and confirmation do not match.'); return; }
+    if (next === current) { showPwError('New password must differ from the current one.'); return; }
+
+    GPN.setLoading(btn, true, 'Updating…');
+
+    GPN.api('auth.changePassword', {
+      currentPassword: current,
+      newPassword:     next
+    }).then(function (j) {
+      GPN.setLoading(btn, false);
+
+      if (!j || !j.ok) {
+        showPwError(GPN.friendlyError(j));
+        return;
+      }
+
+      GPN.Session.save(j.data || {});
+      exitForcedMode();
+      GPN.Modal.close('pwModal');
+      GPN.Toast.ok('Password updated successfully.');
+
+      setTimeout(function () {
+        window.location.replace('parent.html');
+      }, 700);
+    });
+  }
+
+  function showPwError(msg) {
+    var el = GPN.byId('pwAlert');
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+})();
+</script>
+</body>
+</html>

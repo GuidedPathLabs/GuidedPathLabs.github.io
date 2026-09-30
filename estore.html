@@ -1,1 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="description" content="Guided Path Noida Store — Booklets, test packs, study materials and courses. Buy via WhatsApp.">
+  <title>Store — Guided Path Noida</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body>
 
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading store…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <!-- ============================================================
+       TOPBAR
+       ============================================================ -->
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">Store</div>
+    </div>
+    <div class="gpn-topbar-user" id="topbarUser">
+      <!-- filled by JS: Sign In OR My Dashboard -->
+    </div>
+  </header>
+
+  <main class="gpn-main">
+
+    <!-- ============================================================
+         HERO
+         ============================================================ -->
+    <section class="gpn-store-hero">
+      <h1 class="gpn-store-title">GPN <span>Store</span></h1>
+      <p class="gpn-store-sub">
+        Booklets, test packs, study materials and full courses — pick what you need.
+        Order via WhatsApp, pay securely, receive instantly.
+      </p>
+    </section>
+
+    <!-- ============================================================
+         NOTICE (if admin set one)
+         ============================================================ -->
+    <div id="noticeWrap" hidden></div>
+
+    <!-- ============================================================
+         TABS
+         ============================================================ -->
+    <nav class="gpn-store-tabs" id="tabs">
+      <button class="gpn-store-tab active" data-tab="booklets" type="button">Booklets</button>
+      <button class="gpn-store-tab" data-tab="testPacks" type="button">Test Packs</button>
+      <button class="gpn-store-tab" data-tab="materialPacks" type="button">Material Packs</button>
+      <button class="gpn-store-tab" data-tab="courses" type="button">Courses</button>
+    </nav>
+
+    <!-- ============================================================
+         PRODUCT GRID
+         ============================================================ -->
+    <div id="productGrid">
+      <div class="gpn-loading"><span class="gpn-spinner"></span> Loading products…</div>
+    </div>
+
+    <!-- ============================================================
+         HELP / CONTACT
+         ============================================================ -->
+    <section class="gpn-section" style="margin-top:32px;">
+      <div class="gpn-card">
+        <div class="gpn-card-head">
+          <h3 class="gpn-card-title">How ordering works</h3>
+        </div>
+        <div class="gpn-card-body">
+          <ol style="padding-left:20px;line-height:1.9;color:var(--tx-dim);">
+            <li>Tap <b>Buy on WhatsApp</b> on any product.</li>
+            <li>Send us the pre-filled message — we'll confirm availability and total.</li>
+            <li>Pay via UPI / NEFT / Cash — we'll share details on WhatsApp.</li>
+            <li>Receive your digital product instantly (or collect printed copies from the centre).</li>
+          </ol>
+          <div class="gpn-row" style="margin-top:16px;">
+            <a class="gpn-btn gpn-btn-primary" href="https://wa.me/guidedpathnoida" target="_blank" rel="noopener">Chat with us on WhatsApp</a>
+            <a class="gpn-btn gpn-btn-ghost" href="https://guidedpathnoida.in" target="_blank" rel="noopener">Visit website</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         FOOTER
+         ============================================================ -->
+    <footer class="gpn-footer">
+      <div>Guided Path Noida · Store</div>
+      <div style="margin-top:6px;">
+        <a href="https://guidedpathnoida.in" target="_blank" rel="noopener">guidedpathnoida.in</a>
+        &nbsp;·&nbsp;
+        <a href="https://wa.me/guidedpathnoida" target="_blank" rel="noopener">WhatsApp</a>
+        &nbsp;·&nbsp;
+        <a href="terms.html">Terms</a>
+      </div>
+    </footer>
+
+  </main>
+</div>
+
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ==========================================================
+     STATE
+     ========================================================== */
+  var DATA = {
+    booklets:      [],
+    testPacks:     [],
+    materialPacks: [],
+    courses:       [],
+    notice:        ''
+  };
+
+  var currentTab = 'booklets';
+
+  /* ==========================================================
+     BOOT
+     ========================================================== */
+  GPN.ready(function () {
+    /* Topbar link — depends on login state */
+    renderTopbarLink();
+
+    /* Tab switching */
+    GPN.$$('#tabs .gpn-store-tab').forEach(function (btn) {
+      GPN.on(btn, 'click', function () {
+        GPN.$$('#tabs .gpn-store-tab').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentTab = btn.dataset.tab;
+        renderProducts();
+      });
+    });
+
+    /* Reveal app immediately, then load products */
+    GPN.byId('appRoot').hidden = false;
+    GPN.byId('pageLoading').hidden = true;
+
+    /* Load products */
+    loadProducts();
+  });
+
+
+  /* ==========================================================
+     TOPBAR LINK
+     ========================================================== */
+  function renderTopbarLink() {
+    var wrap = GPN.byId('topbarUser');
+    if (!wrap) return;
+
+    if (GPN.Session.isLoggedIn()) {
+      var name  = GPN.Session.getName() || GPN.Session.getUser() || 'User';
+      var dest  = GPN.Session.landingPage();
+      wrap.innerHTML =
+        '<span class="gpn-user-badge">' + GPN.esc(name) + '</span>' +
+        '<a class="gpn-btn gpn-btn-ghost gpn-btn-sm" href="' + GPN.esc(dest) + '">My Dashboard →</a>';
+    } else {
+      wrap.innerHTML =
+        '<a class="gpn-btn gpn-btn-primary gpn-btn-sm" href="login.html">Sign In →</a>';
+    }
+  }
+
+
+  /* ==========================================================
+     LOAD PRODUCTS
+     ========================================================== */
+  function loadProducts() {
+    GPN.api('publicProductsList', null, { skipToken: true }).then(function (j) {
+      if (!j || !j.ok) {
+        GPN.showContainerError(GPN.byId('productGrid'), 'Could not load products right now. Please try again in a moment.');
+        return;
+      }
+      var d = j.data || {};
+      DATA.booklets      = d.booklets      || [];
+      DATA.testPacks     = d.testPacks     || [];
+      DATA.materialPacks = d.materialPacks || [];
+      DATA.courses       = d.courses       || [];
+      DATA.notice        = d.notice        || '';
+
+      renderNotice();
+      renderProducts();
+    }).catch(function (err) {
+      console.error('Store load error:', err);
+      GPN.showContainerError(GPN.byId('productGrid'), 'Could not load products right now. Please try again in a moment.');
+    });
+  }
+
+
+  /* ==========================================================
+     NOTICE
+     ========================================================== */
+  function renderNotice() {
+    var wrap = GPN.byId('noticeWrap');
+    if (!DATA.notice) {
+      wrap.hidden = true;
+      return;
+    }
+    wrap.innerHTML = '<div class="gpn-store-notice">' + GPN.esc(DATA.notice) + '</div>';
+    wrap.hidden = false;
+  }
+
+
+  /* ==========================================================
+     RENDER PRODUCTS
+     ========================================================== */
+  function renderProducts() {
+    var grid = GPN.byId('productGrid');
+    var list = DATA[currentTab] || [];
+
+    if (!list.length) {
+      var label = tabLabel(currentTab);
+      grid.innerHTML =
+        '<div class="gpn-card"><div class="gpn-card-body">' +
+          '<div class="gpn-empty-state">' +
+            'No ' + GPN.esc(label) + ' available right now.<br>' +
+            'Please check back soon or contact us on WhatsApp.' +
+          '</div>' +
+        '</div></div>';
+      return;
+    }
+
+    grid.innerHTML =
+      '<div class="gpn-product-grid">' +
+        list.map(renderProductCard).join('') +
+      '</div>';
+  }
+
+  function tabLabel(tab) {
+    if (tab === 'booklets')      return 'booklets';
+    if (tab === 'testPacks')     return 'test packs';
+    if (tab === 'materialPacks') return 'material packs';
+    if (tab === 'courses')       return 'courses';
+    return 'products';
+  }
+
+
+  /* ==========================================================
+     SINGLE PRODUCT CARD
+     ========================================================== */
+  function renderProductCard(p) {
+    var hasImg = p.ImageURL && String(p.ImageURL).indexOf('http') === 0;
+    var priceRow = '';
+    if (p.HasDiscount) {
+      priceRow =
+        '<span class="gpn-product-price">' + GPN.formatCurrency(p.DiscountedPrice) + '</span>' +
+        '<span class="gpn-product-price-strike">' + GPN.formatCurrency(p.Price) + '</span>' +
+        '<span class="gpn-product-discount">' + GPN.esc(String(p.DiscountPercent)) + '% OFF</span>';
+    } else {
+      priceRow = '<span class="gpn-product-price">' + GPN.formatCurrency(p.Price) + '</span>';
+    }
+
+    var buyUrl = p.BuyURL || (GPN.cfg('WHATSAPP', 'https://wa.me/guidedpathnoida') +
+      '?text=' + encodeURIComponent('Hi GPN! I want to buy: ' + (p.Name || '') + ' (' + (p.ProductID || '') + ')'));
+
+    var desc = p.Description ? String(p.Description) : '';
+    var shortDesc = desc.length > 160 ? desc.substring(0, 160) + '…' : desc;
+
+    return '<div class="gpn-product-card">' +
+      (hasImg
+        ? '<img class="gpn-product-image" src="' + GPN.esc(p.ImageURL) + '" alt="' + GPN.esc(p.Name || 'Product') + '" loading="lazy">'
+        : '<div class="gpn-product-image-placeholder">GPN</div>') +
+      '<div class="gpn-product-body">' +
+        (p.Tag ? '<span class="gpn-product-tag">' + GPN.esc(p.Tag) + '</span>' : '') +
+        '<h3 class="gpn-product-name">' + GPN.esc(p.Name || '') + '</h3>' +
+        (p.Class ? '<div class="gpn-product-class">' + GPN.esc(p.Class) + '</div>' : '') +
+        (shortDesc ? '<p class="gpn-product-desc">' + GPN.esc(shortDesc) + '</p>' : '<p class="gpn-product-desc"></p>') +
+        '<div class="gpn-product-price-row">' + priceRow + '</div>' +
+        '<div class="gpn-product-actions">' +
+          '<a class="gpn-btn gpn-btn-primary gpn-btn-block" href="' + GPN.esc(buyUrl) + '" target="_blank" rel="noopener">Buy on WhatsApp</a>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+})();
+</script>
+</body>
+</html>

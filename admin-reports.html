@@ -35,6 +35,7 @@
     <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
     <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
     <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-master.html">Master</a>
     <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
     <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
     <a class="gpn-navstrip-btn active" href="admin-reports.html">Reports</a>
@@ -48,7 +49,6 @@
       <p class="gpn-admin-hero-sub">Generate print-ready records or download CSV. Print → Save as PDF works on any device.</p>
     </section>
 
-    <!-- Controls -->
     <div class="gpn-card">
       <div class="gpn-card-head">
         <h3 class="gpn-card-title">Configure Report</h3>
@@ -60,6 +60,7 @@
             <select id="rpModule" class="gpn-select">
               <option value="online">Online</option>
               <option value="offline">Offline</option>
+              <option value="master">Master</option>
             </select>
           </div>
           <div class="gpn-field">
@@ -81,7 +82,6 @@
       </div>
     </div>
 
-    <!-- Result preview (short summary before print) -->
     <div class="gpn-card" id="rpSummary" hidden>
       <div class="gpn-card-head">
         <h3 class="gpn-card-title">Preview</h3>
@@ -112,10 +112,7 @@
       if (confirm('Sign out?')) GPN.Guard.logout();
     });
 
-    /* Wire module switch */
     GPN.on(GPN.byId('rpModule'), 'change', populateTypes);
-
-    /* Wire action buttons */
     GPN.on(GPN.byId('rpPreview'), 'click', function () { run('preview'); });
     GPN.on(GPN.byId('rpCsv'), 'click', function () { run('csv'); });
 
@@ -125,9 +122,6 @@
     populateTypes();
   });
 
-  /* ============================================================
-     REPORT DEFINITIONS
-     ============================================================ */
   var REPORT_DEFS = {
     online: [
       { value: 'students-list',    label: 'All Students List',           filters: ['search'] },
@@ -149,12 +143,13 @@
       { value: 'batch-roster',     label: 'Batch Roster',                 filters: ['batch'] },
       { value: 'fees-summary',     label: 'Fees Summary (Monthly)',       filters: [] },
       { value: 'leaderboard',      label: 'Leaderboard Snapshot',         filters: [] }
+    ],
+    master: [
+      { value: 'master-list',      label: 'All Master Students',          filters: ['search'] },
+      { value: 'master-student-full', label: 'Single Master Student — Full Record', filters: ['masterStudent'] }
     ]
   };
 
-  /* ============================================================
-     TYPE POPULATION
-     ============================================================ */
   function populateTypes() {
     var mod = GPN.byId('rpModule').value;
     var defs = REPORT_DEFS[mod] || [];
@@ -210,6 +205,18 @@
         sFg.appendChild(sL); sFg.appendChild(sSel);
         wrap.appendChild(sFg);
         promises.push(loadStudentOptions(sSel));
+      } else if (f === 'masterStudent') {
+        var msFg = document.createElement('div');
+        msFg.className = 'gpn-field gpn-field-full';
+        var msL = document.createElement('label');
+        msL.className = 'gpn-label'; msL.textContent = 'Master Student';
+        var msSel = document.createElement('select');
+        msSel.id = 'rpMasterStudent';
+        msSel.className = 'gpn-select';
+        msSel.innerHTML = '<option value="">Loading…</option>';
+        msFg.appendChild(msL); msFg.appendChild(msSel);
+        wrap.appendChild(msFg);
+        promises.push(loadMasterStudentOptions(msSel));
       } else if (f === 'batch') {
         var bFg = document.createElement('div');
         bFg.className = 'gpn-field';
@@ -252,6 +259,17 @@
     });
   }
 
+  function loadMasterStudentOptions(sel) {
+    return GPN.api('adminMasterListStudents').then(function (j) {
+      if (!j.ok) { sel.innerHTML = '<option value="">Failed to load</option>'; return; }
+      var list = (j.data && j.data.students) || [];
+      sel.innerHTML = '<option value="">— Select Master Student —</option>' +
+        list.map(function (s) {
+          return '<option value="' + GPN.esc(s.StudentID) + '">' + GPN.esc(s.Name) + ' (' + GPN.esc(s.StudentID) + ')</option>';
+        }).join('');
+    });
+  }
+
   function loadBatchOptions(sel) {
     return GPN.api('adminOfflineListBatches').then(function (j) {
       if (!j.ok) { sel.innerHTML = '<option value="">Failed to load</option>'; return; }
@@ -263,9 +281,6 @@
     });
   }
 
-  /* ============================================================
-     RUN — orchestrates fetch → build → output
-     ============================================================ */
   function run(mode) {
     clearAlert();
     var mod = GPN.byId('rpModule').value;
@@ -293,7 +308,6 @@
         return;
       }
 
-      /* Render preview summary */
       GPN.byId('rpSummaryBody').innerHTML =
         '<div class="gpn-quiet" style="margin-bottom:8px;">' + rows.length + ' row(s) · ' + headers.length + ' column(s)</div>' +
         '<div class="gpn-table-wrap" style="max-height:50dvh;overflow:auto;">' +
@@ -307,7 +321,6 @@
         '</div>' +
         (rows.length > 30 ? '<div class="gpn-quiet" style="margin-top:8px;">Showing first 30 of ' + rows.length + ' rows. Full data is used for export.</div>' : '');
 
-      /* Act */
       if (mode === 'csv') {
         var csv = buildCSVString(headers, rows);
         GPN.Export.downloadCSV(csv, sanitizeFilename(title) + '-' + GPN.todayISO() + '.csv');
@@ -328,9 +341,6 @@
     el.textContent = msg; el.hidden = false;
   }
 
-  /* ============================================================
-     OUTPUT BUILDERS
-     ============================================================ */
   function buildCSVString(headers, rows) {
     var out = [];
     out.push(headers.map(csvCell).join(','));
@@ -395,10 +405,7 @@
     return String(s || 'report').replace(/[^a-z0-9\-_]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase();
   }
 
-  /* ============================================================
-     BUILDERS — one per report type
-     ============================================================ */
-  var BUILDERS = { online: {}, offline: {} };
+  var BUILDERS = { online: {}, offline: {}, master: {} };
 
   /* ============ ONLINE BUILDERS ============ */
 
@@ -764,6 +771,66 @@
         rows: list.map(function (r) {
           return [r.rank, r.sid, r.name, r.cls || '', r.school || '', r.overallAvg + '%', r.attendancePct + '%', r.badges || ''];
         })
+      };
+    });
+  };
+
+  /* ============ MASTER BUILDERS ============ */
+
+  BUILDERS.master['master-list'] = function () {
+    return GPN.api('adminMasterListStudents').then(function (j) {
+      if (!j.ok) return j;
+      var list = (j.data && j.data.students) || [];
+      var q = (GPN.byId('rpSearch') && GPN.byId('rpSearch').value.trim().toLowerCase()) || '';
+      if (q) {
+        list = list.filter(function (s) {
+          return (String(s.Name) + ' ' + String(s.StudentID) + ' ' + String(s.Phone || '')).toLowerCase().indexOf(q) >= 0;
+        });
+      }
+      return {
+        ok: true,
+        title: 'Master Students List',
+        headers: ['Student ID', 'Name', 'Class', 'Phone', 'Ol ID', 'Hq ID', 'Status'],
+        rows: list.map(function (s) {
+          return [s.StudentID, s.Name, s.Class || '', s.Phone || '', s.OlID || '', s.HqID || '', s.Status || ''];
+        }),
+        meta: { filter: q ? 'Search: ' + q : '' }
+      };
+    });
+  };
+
+  BUILDERS.master['master-student-full'] = function () {
+    var id = GPN.byId('rpMasterStudent').value;
+    if (!id) return Promise.resolve({ ok: false, error: 'Select a master student.' });
+    return GPN.api('adminMasterGetStudent', { id: id }).then(function (j) {
+      if (!j.ok) return j;
+      var s = (j.data && j.data.student) || {};
+      var rows = [
+        ['Master ID', s.StudentID || ''],
+        ['Name', s.Name || ''],
+        ['Class', s.Class || ''],
+        ['School', s.School || ''],
+        ['Phone', s.Phone || ''],
+        ['Email', s.Email || ''],
+        ['Parent', s.ParentName || ''],
+        ['DOJ', GPN.formatDate(s.DOJ)],
+        ['Status', s.Status || ''],
+        ['Must Change PW', s.MustChangePassword ? 'Yes' : 'No'],
+        ['Last Login', s.LastLogin || '—'],
+        ['---', '---'],
+        ['Online Link (ol-)', s.OlID || 'Not linked'],
+        ['Online Student Name', s.OlStudent && s.OlStudent.Name ? s.OlStudent.Name : '—'],
+        ['Online Status', s.OlStudent && s.OlStudent.Status ? s.OlStudent.Status : '—'],
+        ['Offline Link (hq-)', s.HqID || 'Not linked'],
+        ['Offline Student Name', s.HqStudent && s.HqStudent.Name ? s.HqStudent.Name : '—'],
+        ['Offline Status', s.HqStudent && s.HqStudent.Status ? s.HqStudent.Status : '—']
+      ];
+      return {
+        ok: true,
+        title: 'Master Student Record — ' + (s.Name || id),
+        headers: ['Field', 'Value'],
+        rows: rows,
+        meta: { subtitle: s.StudentID || id }
       };
     });
   };

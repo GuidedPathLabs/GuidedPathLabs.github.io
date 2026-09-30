@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,9 +13,6 @@
 </head>
 <body>
 
-<!-- ============================================================
-     PAGE LOADER
-     ============================================================ -->
 <div class="gpn-page-loading" id="pageLoading">
   <div class="gpn-spinner"></div>
   <div>Loading Admin…</div>
@@ -24,9 +20,6 @@
 
 <div class="gpn-app" hidden id="appRoot">
 
-  <!-- ============================================================
-       TOPBAR
-       ============================================================ -->
   <header class="gpn-topbar">
     <div class="gpn-topbar-brand">
       <div class="gpn-brand-mark">GPN</div>
@@ -39,25 +32,19 @@
     </div>
   </header>
 
-  <!-- ============================================================
-       NAV STRIP — admin pages
-       ============================================================ -->
   <nav class="gpn-navstrip">
     <a class="gpn-navstrip-btn active" href="admin.html">Overview</a>
     <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
     <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-master.html">Master</a>
     <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
     <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
     <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
     <a class="gpn-navstrip-btn" href="admin-settings.html">Settings</a>
   </nav>
 
-  <!-- ============================================================
-       MAIN
-       ============================================================ -->
   <main class="gpn-main">
 
-    <!-- Hero -->
     <section class="gpn-admin-hero">
       <h1 class="gpn-admin-hero-title">Welcome back, <span id="heroName">Admin</span></h1>
       <p class="gpn-admin-hero-sub">
@@ -65,13 +52,11 @@
       </p>
     </section>
 
-    <!-- Needs Attention — only shown when there's something -->
     <section id="needsAttention" hidden>
       <h2 class="gpn-page-title" style="font-size: 1.05rem; margin-bottom: 12px;">Needs Attention</h2>
       <div class="gpn-quick-cards" id="attentionCards"></div>
     </section>
 
-    <!-- Overview stats -->
     <section>
       <h2 class="gpn-page-title" style="font-size: 1.05rem; margin-bottom: 12px;">At a Glance</h2>
       <div class="gpn-stats" id="statsGrid">
@@ -79,7 +64,6 @@
       </div>
     </section>
 
-    <!-- Two-column: module stats -->
     <section class="gpn-grid-2" style="margin-top: 20px;">
       <div class="gpn-card">
         <div class="gpn-card-head">
@@ -102,7 +86,6 @@
       </div>
     </section>
 
-    <!-- Automation + Estore -->
     <section class="gpn-grid-2">
       <div class="gpn-card">
         <div class="gpn-card-head">
@@ -125,7 +108,6 @@
       </div>
     </section>
 
-    <!-- Recent activity -->
     <section style="margin-top: 20px;">
       <div class="gpn-card">
         <div class="gpn-card-head">
@@ -150,13 +132,10 @@
   </main>
 </div>
 
-<!-- ============================================================
-     CHANGE PASSWORD MODAL
-     ============================================================ -->
 <div class="gpn-modal" id="pwModal" hidden>
   <div class="gpn-modal-card">
     <h3 class="gpn-modal-title">Change Password</h3>
-    <p class="gpn-modal-sub">Choose a strong password of at least 10 characters.</p>
+    <p class="gpn-modal-sub" id="pwSubtitle">Choose a strong password of at least 10 characters.</p>
 
     <form id="pwForm" novalidate>
       <div class="gpn-field">
@@ -182,28 +161,22 @@
   </div>
 </div>
 
-<!-- ============================================================
-     SCRIPTS
-     ============================================================ -->
 <script src="shared/config.js?v=1.0.0"></script>
 <script src="shared/gpn.js?v=1.0.0"></script>
 <script>
 (function () {
   'use strict';
 
-  /* ==========================================================
-     GUARD
-     ========================================================== */
   if (!GPN.Guard.requireAdmin()) return;
 
+  var forcedChange = false;
+  var pwModalEl    = null;
+
   GPN.ready(function () {
-    /* ----------------------------------------------------------
-     * Boot
-     * -------------------------------------------------------- */
     var appRoot     = GPN.byId('appRoot');
     var pageLoading = GPN.byId('pageLoading');
+    pwModalEl       = GPN.byId('pwModal');
 
-    /* Fill hero */
     GPN.byId('heroName').textContent = GPN.Session.getName() || GPN.Session.getUser() || 'Admin';
     GPN.byId('heroTime').textContent = new Date().toLocaleDateString('en-IN', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
@@ -211,49 +184,80 @@
     GPN.byId('userBadge').textContent = (GPN.Session.getName() || 'Admin');
     GPN.byId('userBadge').title = GPN.Session.getUser() || '';
 
-    /* Reveal app */
     appRoot.hidden = false;
     pageLoading.hidden = true;
 
-    /* ----------------------------------------------------------
-     * Load all overview data in parallel
-     * -------------------------------------------------------- */
-    loadEverything();
-
-    /* ----------------------------------------------------------
-     * Refresh activity
-     * -------------------------------------------------------- */
-    GPN.on(GPN.byId('btnRefreshActivity'), 'click', loadActivity);
-
-    /* ----------------------------------------------------------
-     * Change password modal
-     * -------------------------------------------------------- */
-    GPN.Modal.wire('pwModal');
-    GPN.on(GPN.byId('btnChangePw'), 'click', function () {
-      GPN.byId('pwAlert').hidden = true;
-      GPN.byId('pwForm').reset();
-      GPN.Modal.open('pwModal');
+    GPN.on(pwModalEl, 'click', function (e) {
+      if (forcedChange) return;
+      if (e.target === pwModalEl) GPN.Modal.close('pwModal');
     });
-    GPN.on(GPN.byId('pwCancel'), 'click', function () { GPN.Modal.close('pwModal'); });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || pwModalEl.hidden) return;
+      if (forcedChange) { e.preventDefault(); return; }
+      GPN.Modal.close('pwModal');
+    });
+
+    GPN.on(GPN.byId('pwCancel'), 'click', function () {
+      if (forcedChange) return;
+      GPN.Modal.close('pwModal');
+    });
+
+    GPN.on(GPN.byId('btnChangePw'), 'click', function () {
+      forcedChange = false;
+      openPwModal();
+    });
 
     GPN.on(GPN.byId('pwForm'), 'submit', function (e) {
       e.preventDefault();
       handleChangePassword();
     });
 
-    /* ----------------------------------------------------------
-     * Logout
-     * -------------------------------------------------------- */
     GPN.on(GPN.byId('btnLogout'), 'click', function () {
       if (!confirm('Sign out of GPN Central?')) return;
       GPN.Guard.logout();
     });
+
+    var q = GPN.query();
+    if (String((q && q.mustChange) || '') === '1') {
+      enterForcedMode();
+    }
+
+    GPN.api('auth.me').then(function (j) {
+      if (j && j.ok && j.data && j.data.mustChange === true) {
+        enterForcedMode();
+      }
+    });
+
+    loadEverything();
+
+    GPN.on(GPN.byId('btnRefreshActivity'), 'click', loadActivity);
   });
 
 
-  /* ==========================================================
-     LOAD EVERYTHING (parallel)
-     ========================================================== */
+  function enterForcedMode() {
+    if (forcedChange) return;
+    forcedChange = true;
+    GPN.byId('pwCancel').style.display = 'none';
+    GPN.byId('pwSubtitle').textContent =
+      'For security, please change your password to continue. Cancel is disabled until you set a new password.';
+    openPwModal();
+  }
+
+  function exitForcedMode() {
+    forcedChange = false;
+    GPN.byId('pwCancel').style.display = '';
+    GPN.byId('pwSubtitle').textContent =
+      'Choose a strong password of at least 10 characters.';
+  }
+
+  function openPwModal() {
+    GPN.byId('pwAlert').hidden = true;
+    GPN.byId('pwForm').reset();
+    GPN.Modal.open('pwModal');
+  }
+
+
   function loadEverything() {
     Promise.all([
       GPN.api('adminOnlineOverview'),
@@ -261,16 +265,14 @@
       GPN.api('adminAutoStats'),
       GPN.api('adminEstoreStats')
     ]).then(function (results) {
-      var onlineRes = results[0];
+      var onlineRes  = results[0];
       var offlineRes = results[1];
-      var autoRes = results[2];
-      var estoreRes = results[3];
+      var autoRes    = results[2];
+      var estoreRes  = results[3];
 
       renderTopStats(onlineRes, offlineRes, autoRes, estoreRes);
       renderModuleCards(onlineRes, offlineRes, autoRes, estoreRes);
       renderNeedsAttention(onlineRes, offlineRes, autoRes, estoreRes);
-
-      /* Activity loads separately (non-blocking) */
       loadActivity();
     }).catch(function (err) {
       console.error('Overview load failed:', err);
@@ -281,9 +283,6 @@
   }
 
 
-  /* ==========================================================
-     TOP STATS
-     ========================================================== */
   function renderTopStats(onlineRes, offlineRes, autoRes, estoreRes) {
     var ol = (onlineRes && onlineRes.ok) ? onlineRes.data : {};
     var hq = (offlineRes && offlineRes.ok) ? offlineRes.data : {};
@@ -292,7 +291,6 @@
     var totalOnline  = Number(ol.totalStudents || 0);
     var totalOffline = Number(hq.totalStudents || 0);
     var activeTotal  = Number(ol.activeStudents || 0) + Number(hq.activeStudents || 0);
-    var combinedRevenue = Number(ol.totalWalletBalance || 0) + Number(es.monthRevenue || 0);
 
     var statsHtml = [
       statCard('Total Students', totalOnline + totalOffline),
@@ -316,11 +314,7 @@
   }
 
 
-  /* ==========================================================
-     MODULE CARDS
-     ========================================================== */
   function renderModuleCards(onlineRes, offlineRes, autoRes, estoreRes) {
-    /* ONLINE */
     var ol = (onlineRes && onlineRes.ok) ? onlineRes.data : null;
     if (ol) {
       GPN.byId('onlineStats').innerHTML = statList([
@@ -337,7 +331,6 @@
       GPN.byId('onlineStats').innerHTML = statError('Online stats unavailable');
     }
 
-    /* OFFLINE */
     var hq = (offlineRes && offlineRes.ok) ? offlineRes.data : null;
     if (hq) {
       GPN.byId('offlineStats').innerHTML = statList([
@@ -354,7 +347,6 @@
       GPN.byId('offlineStats').innerHTML = statError('Offline stats unavailable');
     }
 
-    /* AUTOMATION */
     var au = (autoRes && autoRes.ok) ? autoRes.data : null;
     if (au) {
       GPN.byId('autoStats').innerHTML = statList([
@@ -371,7 +363,6 @@
       GPN.byId('autoStats').innerHTML = statError('Automation stats unavailable');
     }
 
-    /* ESTORE */
     var es = (estoreRes && estoreRes.ok) ? estoreRes.data : null;
     if (es) {
       var counts = es.productCounts || {};
@@ -407,9 +398,6 @@
   }
 
 
-  /* ==========================================================
-     NEEDS ATTENTION
-     ========================================================== */
   function renderNeedsAttention(onlineRes, offlineRes, autoRes, estoreRes) {
     var ol = (onlineRes && onlineRes.ok) ? onlineRes.data : {};
     var hq = (offlineRes && offlineRes.ok) ? offlineRes.data : {};
@@ -476,14 +464,11 @@
   }
 
 
-  /* ==========================================================
-     ACTIVITY
-     ========================================================== */
   function loadActivity() {
     var wrap = GPN.byId('activityWrap');
     GPN.showContainerLoading(wrap, 'Loading activity…');
 
-    GPN.api('adminActivity', { limit: 30 }).then(function (json) {
+    GPN.api('adminMasterActivity', { limit: 30 }).then(function (json) {
       if (!json || !json.ok) {
         GPN.showContainerError(wrap, GPN.friendlyError(json));
         return;
@@ -508,6 +493,72 @@
             '<td data-label="When">' + GPN.esc(GPN.formatDateTime(r.Timestamp)) + '</td>' +
             '<td data-label="User">' + GPN.esc(r.UserID || '—') + '</td>' +
             '<td data-label="Action">' + GPN.esc(r.Action || '—') + '</td>' +
+            '<td data-label="Details" class="wrap">' + GPN.esc(r.Description || '—') + '</td>' +
+          '</tr>';
+        }).join('') +
+      '</tbody></table>' +
+    '</div>';
+  }
+
+
+  function handleChangePassword() {
+    var alertBox = GPN.byId('pwAlert');
+    var btn      = GPN.byId('pwSubmit');
+    alertBox.hidden = true;
+
+    var current = GPN.byId('pwCurrent').value;
+    var next    = GPN.byId('pwNew').value;
+    var confirm = GPN.byId('pwConfirm').value;
+
+    if (!current || !next || !confirm) {
+      showPwError('Please fill in all fields.'); return;
+    }
+    if (next.length < 10) {
+      showPwError('New password must be at least 10 characters.'); return;
+    }
+    if (next !== confirm) {
+      showPwError('New password and confirmation do not match.'); return;
+    }
+    if (next === current) {
+      showPwError('New password must differ from the current one.'); return;
+    }
+
+    GPN.setLoading(btn, true, 'Updating…');
+
+    GPN.api('auth.changePassword', {
+      currentPassword: current,
+      newPassword:     next
+    }).then(function (json) {
+      GPN.setLoading(btn, false);
+
+      if (!json || !json.ok) {
+        showPwError(GPN.friendlyError(json));
+        return;
+      }
+
+      GPN.Session.save(json.data || {});
+
+      exitForcedMode();
+      GPN.Modal.close('pwModal');
+
+      GPN.Toast.ok('Password updated successfully.');
+
+      setTimeout(function () {
+        window.location.replace('admin.html');
+      }, 700);
+    });
+  }
+
+  function showPwError(msg) {
+    var alertBox = GPN.byId('pwAlert');
+    alertBox.textContent = msg;
+    alertBox.hidden = false;
+  }
+
+})();
+</script>
+</body>
+</html>(r.Action || '—') + '</td>' +
             '<td data-label="Details" class="wrap">' + GPN.esc(r.Description || '—') + '</td>' +
           '</tr>';
         }).join('') +
@@ -571,6 +622,1939 @@
     alertBox.hidden = false;
   }
 
+})();
+</script>
+</body>
+</html>Programme',p);
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Created.','ok');render('programmes');
+  };
+  content.querySelectorAll('button[data-manage]').forEach(function(b){
+    b.onclick=function(){openProgrammeSubjects(b.getAttribute('data-manage'));};
+  });
+};
+
+async function openProgrammeSubjects(programmeId){
+  var rs=await Promise.all([apiCall('adminListProgrammes'),apiCall('adminListSubjects')]);
+  var rp=rs[0];
+  if(!rp.ok)return toast('Failed to load.','error');
+  var prog=(rp.data.programmes||[]).filter(function(x){return String(x.ProgrammeID)===String(programmeId);})[0];
+  if(!prog)return toast('Programme not found.','error');
+  var subjects=(rs[1].ok&&rs[1].data&&rs[1].data.subjects)||[];
+  var linked=(prog.Subjects||[]).map(function(x){return String(x.SubjectID);});
+  var available=subjects.filter(function(s){return linked.indexOf(String(s.SubjectID))<0;});
+
+  var html=header('Programme — '+prog.Name,'Manage attached subjects.');
+  html+='<div class="arow"><button class="btn ghost" id="pm_back">← Back</button></div>';
+  html+='<div class="panel"><div class="ptitle">Attach Subject</div><div class="fgrid">'+
+    fg('Subject','pm_subject','select',{options:rowsToOptions(available,'SubjectID','Name','— Select —'),required:true})+
+  '</div><div class="arow mt16"><button class="btn gold" id="pm_add">Add Subject</button></div></div>';
+
+  html+='<div class="panel"><div class="ptitle">Attached Subjects ('+(prog.Subjects||[]).length+')</div>';
+  if(!prog.Subjects||!prog.Subjects.length)html+=emptyState('No subjects attached.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>ID</th><th>Name</th><th>Class</th><th></th></tr></thead><tbody>';
+    prog.Subjects.forEach(function(s){
+      html+='<tr><td class="mono">'+esc(s.SubjectID)+'</td><td>'+esc(s.Name)+'</td><td>'+esc(s.Class)+'</td><td><button class="btn dng" data-rem="'+esc(s.SubjectID)+'">Remove</button></td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  content.innerHTML=html;
+
+  document.getElementById('pm_back').onclick=function(){render('programmes');};
+  document.getElementById('pm_add').onclick=async function(){
+    var sid=val('pm_subject');
+    if(!sid)return toast('Pick a subject.','error');
+    var r=await apiCall('adminAddProgrammeSubject',{programmeId:programmeId,subjectId:sid});
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Attached.','ok');openProgrammeSubjects(programmeId);
+  };
+  content.querySelectorAll('button[data-rem]').forEach(function(b){
+    b.onclick=async function(){
+      var r=await apiCall('adminRemoveProgrammeSubject',{programmeId:programmeId,subjectId:b.getAttribute('data-rem')});
+      if(!r.ok)return toast(r.error||'Failed.','error');
+      toast('Removed.','ok');openProgrammeSubjects(programmeId);
+    };
+  });
+}
+
+/* ---------- SUBJECTS ---------- */
+VIEWS.subjects=async function(){
+  var r=await apiCall('adminListSubjects');
+  if(!r.ok)return errorState(r.error||'Failed to load.');
+  var rows=(r.data&&r.data.subjects)||[];
+  var html=header('Subjects','Create subjects.');
+  html+='<div class="panel"><div class="ptitle">Create Subject</div><div class="fgrid">'+
+    fg('Name','s_name','text',{required:true})+
+    fg('Class','s_class','text',{})+
+    fg('Board','s_board','text',{})+
+  '</div><div class="arow mt16"><button class="btn gold" id="s_create">Create Subject</button></div></div>';
+  html+='<div class="panel"><div class="ptitle">All Subjects ('+rows.length+')</div>';
+  if(!rows.length)html+=emptyState('No subjects yet.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>ID</th><th>Name</th><th>Class</th><th>Board</th><th>Status</th></tr></thead><tbody>';
+    rows.forEach(function(s){
+      html+='<tr><td class="mono">'+esc(s.SubjectID)+'</td><td>'+esc(s.Name)+'</td><td>'+esc(s.Class)+'</td><td>'+esc(s.Board)+'</td><td>'+badge(s.Status||'')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  content.innerHTML=html;
+  document.getElementById('s_create').onclick=async function(){
+    var p={Name:val('s_name'),Class:val('s_class'),Board:val('s_board'),Status:'ACTIVE'};
+    if(!p.Name)return toast('Name required.','error');
+    var r=await apiCall('adminCreateSubject',p);
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Created.','ok');render('subjects');
+  };
+};
+
+/* ---------- CHAPTERS ---------- */
+VIEWS.chapters=async function(){
+  var rs=await Promise.all([apiCall('adminListChapters'),apiCall('adminListSubjects')]);
+  var rc=rs[0];
+  if(!rc.ok)return errorState(rc.error||'Failed to load.');
+  var chapters=(rc.data&&rc.data.chapters)||[];
+  var subjects=(rs[1].ok&&rs[1].data&&rs[1].data.subjects)||[];
+  var subMap={};subjects.forEach(function(s){subMap[s.SubjectID]=s.Name;});
+
+  var html=header('Chapters','Chapters belong to a subject.');
+  html+='<div class="panel"><div class="ptitle">Create Chapter</div><div class="fgrid">'+
+    fg('Subject','c_subject','select',{options:rowsToOptions(subjects,'SubjectID','Name','— Select —'),required:true})+
+    fg('Name','c_name','text',{required:true})+
+    fg('Number','c_number','text',{})+
+    fg('Description','c_desc','textarea',{full:true})+
+  '</div><div class="arow mt16"><button class="btn gold" id="c_create">Create Chapter</button></div></div>';
+  html+='<div class="panel"><div class="ptitle">All Chapters ('+chapters.length+')</div>';
+  if(!chapters.length)html+=emptyState('No chapters yet.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>ID</th><th>Subject</th><th>Name</th><th>#</th><th>Status</th></tr></thead><tbody>';
+    chapters.forEach(function(c){
+      html+='<tr><td class="mono">'+esc(c.ChapterID)+'</td><td>'+esc(subMap[c.SubjectID]||c.SubjectID)+'</td><td>'+esc(c.Name)+'</td><td>'+esc(c.Number)+'</td><td>'+badge(c.Status||'')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  content.innerHTML=html;
+  document.getElementById('c_create').onclick=async function(){
+    var p={SubjectID:val('c_subject'),Name:val('c_name'),Number:val('c_number'),Description:val('c_desc'),Status:'ACTIVE'};
+    if(!p.SubjectID||!p.Name)return toast('Subject and Name required.','error');
+    var r=await apiCall('adminCreateChapter',p);
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Created.','ok');render('chapters');
+  };
+};
+
+/* ---------- STUDENTS ---------- */
+VIEWS.students=async function(){
+  var r=await apiCall('adminListStudents');
+  if(!r.ok)return errorState(r.error||'Failed to load.');
+  var rows=(r.data&&r.data.students)||[];
+  var html=header('Students','Create students, reset passwords, toggle status.');
+  html+='<div class="panel"><div class="ptitle">Create Student</div><div class="fgrid">'+
+    fg('Name','st_name','text',{required:true})+
+    fg('Password','st_pass','password',{required:true,minlength:6,hint:'Min 6 characters.'})+
+    fg('Class','st_class','text',{})+
+    fg('Board','st_board','text',{})+
+    fg('School','st_school','text',{})+
+    fg('Parent Name','st_parent','text',{})+
+    fg('Phone','st_phone','text',{})+
+  '</div><div class="arow mt16"><button class="btn gold" id="st_create">Create Student</button></div></div>';
+  html+='<div class="panel"><div class="ptitle">All Students ('+rows.length+')</div>';
+  if(!rows.length)html+=emptyState('No students yet.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>ID</th><th>Name</th><th>Class</th><th>Phone</th><th>Status</th><th>Access</th><th>Actions</th></tr></thead><tbody>';
+    rows.forEach(function(s){
+      html+='<tr>'+
+        '<td class="mono">'+esc(s.StudentID)+'</td>'+
+        '<td>'+esc(s.Name)+'</td>'+
+        '<td>'+esc(s.Class)+'</td>'+
+        '<td>'+esc(s.Phone)+'</td>'+
+        '<td>'+badge(s.Status||'')+'</td>'+
+        '<td>'+badge(s.Access||'')+'</td>'+
+        '<td>'+
+          '<button class="btn ghost" data-reset="'+esc(s.StudentID)+'">Reset PW</button> '+
+          '<button class="btn ghost" data-toggle="'+esc(s.StudentID)+'" data-status="'+esc(s.Status||'')+'">Toggle</button>'+
+        '</td>'+
+      '</tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  content.innerHTML=html;
+
+  document.getElementById('st_create').onclick=async function(){
+    var p={Name:val('st_name'),Password:val('st_pass'),Class:val('st_class'),Board:val('st_board'),School:val('st_school'),ParentName:val('st_parent'),Phone:val('st_phone')};
+    if(!p.Name||!p.Password)return toast('Name and password required.','error');
+    if(p.Password.length<6)return toast('Password ≥ 6 chars.','error');
+    var r=await apiCall('adminCreateStudent',p);
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Created.','ok');render('students');
+  };
+  content.querySelectorAll('button[data-reset]').forEach(function(b){
+    b.onclick=async function(){
+      var id=b.getAttribute('data-reset');
+      var np=prompt('New password for '+id+' (min 6):');
+      if(!np)return;
+      if(np.length<6)return toast('Password ≥ 6 chars.','error');
+      var r=await apiCall('adminResetPassword',{id:id,password:np});
+      if(!r.ok)return toast(r.error||'Failed.','error');
+      toast('Reset. Revoked: '+((r.data||{}).sessionsRevoked||0),'ok');
+    };
+  });
+  content.querySelectorAll('button[data-toggle]').forEach(function(b){
+    b.onclick=async function(){
+      var cur=String(b.getAttribute('data-status')||'').toUpperCase();
+      var next=cur==='ACTIVE'?'SUSPENDED':'ACTIVE';
+      var r=await apiCall('adminUpdateStudent',{id:b.getAttribute('data-toggle'),patch:{Status:next}});
+      if(!r.ok)return toast(r.error||'Failed.','error');
+      toast('Status → '+next,'ok');render('students');
+    };
+  });
+};
+
+/* ---------- ENROLMENTS ---------- */
+VIEWS.enrolments=async function(){
+  var rs=await Promise.all([apiCall('adminListEnrolments'),apiCall('adminListProgrammes'),apiCall('adminListStudents')]);
+  var re=rs[0];
+  if(!re.ok)return errorState(re.error||'Failed to load.');
+  var enrol=(re.data&&re.data.enrolments)||[];
+  var programmes=(rs[1].ok&&rs[1].data&&rs[1].data.programmes)||[];
+  var students=(rs[2].ok&&rs[2].data&&rs[2].data.students)||[];
+
+  var html=header('Enrolments','Enrol students in programmes.');
+  html+='<div class="panel"><div class="ptitle">New Enrolment</div><div class="fgrid">'+
+    fg('Student','e_student','select',{options:rowsToOptions(students,'StudentID','Name','— Select —'),required:true})+
+    fg('Programme','e_programme','select',{options:rowsToOptions(programmes,'ProgrammeID','Name','— Select —'),required:true})+
+    fg('Subject IDs (comma-separated)','e_subjects','text',{hint:'Leave blank for all programme subjects.'})+
+    fg('Start Date','e_start','date',{})+
+    fg('End Date','e_end','date',{})+
+    fg('Status','e_status','select',{options:['ACTIVE','SUSPENDED','EXPIRED','CANCELLED'],value:'ACTIVE'})+
+  '</div><div class="arow mt16"><button class="btn gold" id="e_create">Create Enrolment</button></div></div>';
+  html+='<div class="panel"><div class="ptitle">All Enrolments ('+enrol.length+')</div>';
+  if(!enrol.length)html+=emptyState('No enrolments yet.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>ID</th><th>Student</th><th>Programme</th><th>Subjects</th><th>Start</th><th>End</th><th>Status</th></tr></thead><tbody>';
+    enrol.forEach(function(e){
+      html+='<tr><td class="mono">'+esc(e.EnrolmentID)+'</td><td>'+esc(e.StudentID)+'</td><td>'+esc(e.ProgrammeID)+'</td><td class="wrap">'+esc(e.SubjectIDs||'—')+'</td><td>'+esc(e.StartDate)+'</td><td>'+esc(e.EndDate)+'</td><td>'+badge(e.Status||'')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  content.innerHTML=html;
+  document.getElementById('e_create').onclick=async function(){
+    var subs=val('e_subjects');
+    var p={StudentID:val('e_student'),ProgrammeID:val('e_programme'),SubjectIDs:subs?subs.split(',').map(function(x){return x.trim();}).filter(Boolean):'',StartDate:val('e_start'),EndDate:val('e_end'),Status:val('e_status')};
+    if(!p.StudentID||!p.ProgrammeID)return toast('Student & Programme required.','error');
+    var r=await apiCall('adminCreateEnrolment',p);
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Created.','ok');render('enrolments');
+  };
+};
+
+/* ---------- PAYMENTS ---------- */
+VIEWS.payments=async function(){
+  var rs=await Promise.all([apiCall('adminListPayments'),apiCall('adminListStudents'),apiCall('adminListProgrammes')]);
+  var rp=rs[0];
+  if(!rp.ok)return errorState(rp.error||'Failed to load.');
+  var payments=(rp.data&&rp.data.payments)||[];
+  var students=(rs[1].ok&&rs[1].data&&rs[1].data.students)||[];
+  var programmes=(rs[2].ok&&rs[2].data&&rs[2].data.programmes)||[];
+
+  var html=header('Payments','Record and view payments.');
+  html+='<div class="panel"><div class="ptitle">Record Payment</div><div class="fgrid">'+
+    fg('Student','pay_student','select',{options:rowsToOptions(students,'StudentID','Name','— Select —'),required:true})+
+    fg('Programme','pay_programme','select',{options:rowsToOptions(programmes,'ProgrammeID','Name')})+
+    fg('Amount','pay_amount','number',{required:true})+
+    fg('Payment Date','pay_date','date',{})+
+    fg('Reference','pay_ref','text',{})+
+    fg('Start Date','pay_start','date',{})+
+    fg('End Date','pay_end','date',{})+
+    fg('Status','pay_status','select',{options:['PAID','PENDING','EXPIRED','CANCELLED'],value:'PAID'})+
+    fg('Notes','pay_notes','textarea',{full:true})+
+  '</div><div class="arow mt16"><button class="btn gold" id="pay_create">Record Payment</button></div></div>';
+  html+='<div class="panel"><div class="ptitle">All Payments ('+payments.length+')</div>';
+  if(!payments.length)html+=emptyState('No payments yet.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>ID</th><th>Student</th><th>Amount</th><th>Date</th><th>Status</th><th>Ref</th></tr></thead><tbody>';
+    payments.forEach(function(p){
+      html+='<tr><td class="mono">'+esc(p.PaymentID)+'</td><td>'+esc(p.StudentID)+'</td><td>'+esc(p.Amount)+'</td><td>'+esc(p.PaymentDate)+'</td><td>'+badge(p.Status||'')+'</td><td>'+esc(p.Reference)+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  content.innerHTML=html;
+  document.getElementById('pay_create').onclick=async function(){
+    var p={StudentID:val('pay_student'),ProgrammeID:val('pay_programme'),Amount:val('pay_amount'),PaymentDate:val('pay_date'),Reference:val('pay_ref'),StartDate:val('pay_start'),EndDate:val('pay_end'),Status:val('pay_status'),Notes:val('pay_notes')};
+    if(!p.StudentID||p.Amount==='')return toast('Student & Amount required.','error');
+    var r=await apiCall('adminCreatePayment',p);
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Recorded.','ok');render('payments');
+  };
+};
+
+/* ---------- MATERIALS ---------- */
+VIEWS.materials=async function(){
+  var rs=await Promise.all([apiCall('adminListMaterials'),apiCall('adminListSubjects'),apiCall('adminListChapters'),apiCall('adminListProgrammes')]);
+  var rm=rs[0];
+  if(!rm.ok)return errorState(rm.error||'Failed to load.');
+  var materials=(rm.data&&rm.data.materials)||[];
+  var subjects=(rs[1].ok&&rs[1].data&&rs[1].data.subjects)||[];
+  var chapters=(rs[2].ok&&rs[2].data&&rs[2].data.chapters)||[];
+  var programmes=(rs[3].ok&&rs[3].data&&rs[3].data.programmes)||[];
+
+  var html=header('Study Materials','Add study materials. r2:// for R2 or full https URL.');
+  html+='<div class="panel"><div class="ptitle">Add Material</div><div class="fgrid">'+
+    fg('Title','m_title','text',{required:true})+
+    fg('Type','m_type','select',{options:['PDF','VIDEO','LINK','DOC'],value:'PDF'})+
+    fg('URL','m_url','text',{full:true,hint:'r2://bucket/key for R2, or https://…'})+
+    fg('Subject','m_subject','select',{options:rowsToOptions(subjects,'SubjectID','Name')})+
+    fg('Chapter','m_chapter','select',{options:rowsToOptions(chapters,'ChapterID','Name')})+
+    fg('Programme','m_programme','select',{options:rowsToOptions(programmes,'ProgrammeID','Name')})+
+    fg('Class','m_class','text',{})+
+    fg('Description','m_desc','textarea',{full:true})+
+  '</div><div class="arow mt16"><button class="btn gold" id="m_create">Add Material</button></div></div>';
+  html+='<div class="panel"><div class="ptitle">All Materials ('+materials.length+')</div>';
+  if(!materials.length)html+=emptyState('No materials yet.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Class</th><th>Status</th><th>URL</th></tr></thead><tbody>';
+    materials.forEach(function(m){
+      html+='<tr><td class="mono">'+esc(m.MaterialID)+'</td><td>'+esc(m.Title)+'</td><td>'+esc(m.Type)+'</td><td>'+esc(m.Class)+'</td><td>'+badge(m.Status||'')+'</td><td class="wrap mono">'+esc(m.URL||'')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  content.innerHTML=html;
+  document.getElementById('m_create').onclick=async function(){
+    var p={Title:val('m_title'),Type:val('m_type'),URL:val('m_url'),SubjectID:val('m_subject'),ChapterID:val('m_chapter'),ProgrammeID:val('m_programme'),Class:val('m_class'),Description:val('m_desc'),Status:'ACTIVE'};
+    if(!p.Title)return toast('Title required.','error');
+    var r=await apiCall('adminCreateMaterial',p);
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Added.','ok');render('materials');
+  };
+};
+
+/* ---------- QUESTION BANK (R2-URL only, no MCQ builder) ---------- */
+VIEWS.questionbank=async function(){
+  var rs=await Promise.all([apiCall('adminListQuestionBank'),apiCall('adminListSubjects'),apiCall('adminListChapters'),apiCall('adminListProgrammes')]);
+  var rq=rs[0];
+  if(!rq.ok)return errorState(rq.error||'Failed to load.');
+  var items=(rq.data&&rq.data.items)||[];
+  var subjects=(rs[1].ok&&rs[1].data&&rs[1].data.subjects)||[];
+  var chapters=(rs[2].ok&&rs[2].data&&rs[2].data.chapters)||[];
+  var programmes=(rs[3].ok&&rs[3].data&&rs[3].data.programmes)||[];
+
+  var html=header('Question Bank','R2 resource links only — not MCQs. Paste an r2:// URL.');
+  html+='<div class="panel"><div class="ptitle">Add Resource</div><div class="fgrid">'+
+    fg('Title','q_title','text',{required:true})+
+    fg('R2 URL','q_r2','text',{full:true,required:true,placeholder:'r2://bucket/object.pdf',hint:'Must start with r2:// — http:// and https:// are rejected by the backend.'})+
+    fg('Subject','q_subject','select',{options:rowsToOptions(subjects,'SubjectID','Name')})+
+    fg('Chapter','q_chapter','select',{options:rowsToOptions(chapters,'ChapterID','Name')})+
+    fg('Programme','q_programme','select',{options:rowsToOptions(programmes,'ProgrammeID','Name')})+
+    fg('Class','q_class','text',{})+
+    fg('Description','q_desc','textarea',{full:true})+
+  '</div><div class="arow mt16"><button class="btn gold" id="q_create">Add Resource</button></div></div>';
+  html+='<div class="panel"><div class="ptitle">All Resources ('+items.length+')</div>';
+  if(!items.length)html+=emptyState('No resources yet.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>ID</th><th>Title</th><th>Class</th><th>Status</th><th>R2 URL</th><th></th></tr></thead><tbody>';
+    items.forEach(function(q){
+      html+='<tr>'+
+        '<td class="mono">'+esc(q.BankID)+'</td>'+
+        '<td>'+esc(q.Title)+'</td>'+
+        '<td>'+esc(q.Class)+'</td>'+
+        '<td>'+badge(q.Status||'')+'</td>'+
+        '<td class="wrap mono">'+esc(q.R2URL||'')+'</td>'+
+        '<td><button class="btn ghost" data-qedit="'+esc(q.BankID)+'">Edit</button></td>'+
+      '</tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  content.innerHTML=html;
+
+  document.getElementById('q_create').onclick=async function(){
+    var p={Title:val('q_title'),R2URL:val('q_r2'),SubjectID:val('q_subject'),ChapterID:val('q_chapter'),ProgrammeID:val('q_programme'),Class:val('q_class'),Description:val('q_desc'),Status:'ACTIVE'};
+    if(!p.Title||!p.R2URL)return toast('Title and R2 URL required.','error');
+    if(p.R2URL.indexOf('r2://')!==0)return toast('R2 URL must start with r2://','error');
+    var r=await apiCall('adminCreateQuestionBank',p);
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Added.','ok');render('questionbank');
+  };
+  content.querySelectorAll('button[data-qedit]').forEach(function(b){
+    b.onclick=function(){openQbEdit(b.getAttribute('data-qedit'),items,subjects,chapters,programmes);};
+  });
+};
+
+function openQbEdit(id,items,subjects,chapters,programmes){
+  var q=items.filter(function(x){return String(x.BankID)===String(id);})[0];
+  if(!q)return toast('Not found.','error');
+  var html=header('Edit Resource — '+q.Title,'Update metadata or R2 link.');
+  html+='<div class="arow"><button class="btn ghost" id="qb_back">← Back</button></div>';
+  html+='<div class="panel"><div class="fgrid">'+
+    fg('Title','qb_title','text',{required:true,value:q.Title||''})+
+    fg('R2 URL','qb_r2','text',{full:true,required:true,value:q.R2URL||''})+
+    fg('Subject','qb_subject','select',{options:rowsToOptions(subjects,'SubjectID','Name'),value:q.SubjectID||''})+
+    fg('Chapter','qb_chapter','select',{options:rowsToOptions(chapters,'ChapterID','Name'),value:q.ChapterID||''})+
+    fg('Programme','qb_programme','select',{options:rowsToOptions(programmes,'ProgrammeID','Name'),value:q.ProgrammeID||''})+
+    fg('Class','qb_class','text',{value:q.Class||''})+
+    fg('Status','qb_status','select',{options:['ACTIVE','INACTIVE'],value:q.Status||'ACTIVE'})+
+    fg('Description','qb_desc','textarea',{full:true,value:q.Description||''})+
+  '</div><div class="arow mt16"><button class="btn gold" id="qb_save">Save</button></div></div>';
+  content.innerHTML=html;
+
+  document.getElementById('qb_back').onclick=function(){render('questionbank');};
+  document.getElementById('qb_save').onclick=async function(){
+    var url=val('qb_r2');
+    if(url.indexOf('r2://')!==0)return toast('R2 URL must start with r2://','error');
+    var patch={
+      Title:val('qb_title'),R2URL:url,SubjectID:val('qb_subject'),
+      ChapterID:val('qb_chapter'),ProgrammeID:val('qb_programme'),
+      Class:val('qb_class'),Status:val('qb_status'),Description:val('qb_desc')
+    };
+    var r=await apiCall('adminUpdateQuestionBank',{id:id,patch:patch});
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Updated.','ok');render('questionbank');
+  };
+}
+
+/* ---------- SCHEDULE ---------- */
+VIEWS.schedule=async function(){
+  var rs=await Promise.all([apiCall('adminListSchedule'),apiCall('adminListStudents'),apiCall('adminListSubjects'),apiCall('adminListProgrammes')]);
+  var r1=rs[0];
+  if(!r1.ok)return errorState(r1.error||'Failed to load.');
+  var schedule=(r1.data&&r1.data.schedule)||[];
+  var students=(rs[1].ok&&rs[1].data&&rs[1].data.students)||[];
+  var subjects=(rs[2].ok&&rs[2].data&&rs[2].data.subjects)||[];
+  var programmes=(rs[3].ok&&rs[3].data&&rs[3].data.programmes)||[];
+
+  var html=header('Schedule','Create schedule entries.');
+  html+='<div class="panel"><div class="ptitle">Create Entry</div><div class="fgrid">'+
+    fg('Type','sc_type','select',{options:['Study','Practice','Test','Revision','Retest'],value:'Study',required:true})+
+    fg('Date','sc_date','date',{required:true})+
+    fg('Start Time','sc_start','time',{})+
+    fg('End Time','sc_end','time',{})+
+    fg('Student','sc_student','select',{options:rowsToOptions(students,'StudentID','Name','— Optional (use Programme) —')})+
+    fg('Programme','sc_programme','select',{options:rowsToOptions(programmes,'ProgrammeID','Name')})+
+    fg('Subject','sc_subject','select',{options:rowsToOptions(subjects,'SubjectID','Name')})+
+    fg('Ref ID (TestID when Type=Test)','sc_ref','text',{})+
+    fg('Status','sc_status','select',{options:['ACTIVE','CANCELLED'],value:'ACTIVE'})+
+  '</div><div class="arow mt16"><button class="btn gold" id="sc_create">Create Entry</button></div></div>';
+  html+='<div class="panel"><div class="ptitle">All Entries ('+schedule.length+')</div>';
+  if(!schedule.length)html+=emptyState('No schedule entries.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>ID</th><th>Date</th><th>Start</th><th>End</th><th>Type</th><th>Student</th><th>Programme</th><th>Ref</th><th>Status</th></tr></thead><tbody>';
+    schedule.forEach(function(s){
+      html+='<tr><td class="mono">'+esc(s.ScheduleID)+'</td><td>'+esc(s.Date)+'</td><td>'+esc(s.StartTime)+'</td><td>'+esc(s.EndTime)+'</td><td>'+esc(s.Type)+'</td><td>'+esc(s.StudentID||'—')+'</td><td>'+esc(s.ProgrammeID||'—')+'</td><td class="mono">'+esc(s.RefID||'')+'</td><td>'+badge(s.Status||'')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  content.innerHTML=html;
+  document.getElementById('sc_create').onclick=async function(){
+    var p={Type:val('sc_type'),Date:val('sc_date'),StartTime:val('sc_start'),EndTime:val('sc_end'),StudentID:val('sc_student'),ProgrammeID:val('sc_programme'),SubjectID:val('sc_subject'),RefID:val('sc_ref'),Status:val('sc_status')};
+    if(!p.Date)return toast('Date required.','error');
+    if(!p.StudentID&&!p.ProgrammeID)return toast('Provide Student or Programme.','error');
+    var r=await apiCall('adminCreateSchedule',p);
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Created.','ok');render('schedule');
+  };
+};
+
+/* ---------- TESTS (external Google Forms) ---------- */
+VIEWS.tests=async function(){
+  var rs=await Promise.all([apiCall('adminListTests'),apiCall('adminListSubjects'),apiCall('adminListChapters'),apiCall('adminListProgrammes')]);
+  var rt=rs[0];
+  if(!rt.ok)return errorState(rt.error||'Failed to load.');
+  var tests=(rt.data&&rt.data.tests)||[];
+  var subjects=(rs[1].ok&&rs[1].data&&rs[1].data.subjects)||[];
+  var chapters=(rs[2].ok&&rs[2].data&&rs[2].data.chapters)||[];
+  var programmes=(rs[3].ok&&rs[3].data&&rs[3].data.programmes)||[];
+
+  var html=header('Tests','External Google Forms. Create metadata (DRAFT), link the form, advance lifecycle.');
+  html+='<div class="panel"><div class="ptitle">Create Test (metadata only — starts as DRAFT)</div><div class="fgrid">'+
+    fg('Title','t_title','text',{required:true})+
+    fg('Total Marks','t_marks','number',{required:true})+
+    fg('Duration (min)','t_dur','number',{required:true})+
+    fg('Subject','t_subject','select',{options:rowsToOptions(subjects,'SubjectID','Name')})+
+    fg('Chapter','t_chapter','select',{options:rowsToOptions(chapters,'ChapterID','Name')})+
+    fg('Programme','t_programme','select',{options:rowsToOptions(programmes,'ProgrammeID','Name')})+
+  '</div><div class="arow mt16"><button class="btn gold" id="t_create">Create Test</button></div></div>';
+
+  html+='<div class="panel"><div class="ptitle">All Tests ('+tests.length+')</div>';
+  if(!tests.length)html+=emptyState('No tests yet.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>ID</th><th>Title</th><th>Marks</th><th>Dur</th><th>Status</th><th>Form</th><th>Attempts</th><th>Submitted</th><th>Published</th><th></th></tr></thead><tbody>';
+    tests.forEach(function(t){
+      html+='<tr>'+
+        '<td class="mono">'+esc(t.TestID)+'</td>'+
+        '<td class="wrap">'+esc(t.Title)+'</td>'+
+        '<td>'+esc(t.TotalMarks)+'</td>'+
+        '<td>'+esc(t.Duration)+'</td>'+
+        '<td>'+badge(t.Status||'')+'</td>'+
+        '<td>'+(t.FormID?badge('Linked','published'):badge('Not linked','draft'))+'</td>'+
+        '<td>'+esc(t.attempts||0)+'</td>'+
+        '<td>'+esc(t.submitted||0)+'</td>'+
+        '<td>'+esc(t.published||0)+'</td>'+
+        '<td><button class="btn ghost" data-open="'+esc(t.TestID)+'">Open</button></td>'+
+      '</tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  content.innerHTML=html;
+
+  document.getElementById('t_create').onclick=async function(){
+    var p={Title:val('t_title'),TotalMarks:val('t_marks'),Duration:val('t_dur'),SubjectID:val('t_subject'),ChapterID:val('t_chapter'),ProgrammeID:val('t_programme')};
+    if(!p.Title||p.TotalMarks===''||p.Duration==='')return toast('Title, marks, duration required.','error');
+    var r=await apiCall('adminCreateTest',p);
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Created (DRAFT).','ok');
+    openTestEditor(r.data.TestID);
+  };
+  content.querySelectorAll('button[data-open]').forEach(function(b){
+    b.onclick=function(){openTestEditor(b.getAttribute('data-open'));};
+  });
+};
+
+async function openTestEditor(testId){
+  var r=await apiCall('adminGetTest',{id:testId});
+  if(!r.ok)return toast(r.error||'Failed.','error');
+  var test=r.data.test;
+  var attempts=r.data.attempts||[];
+  var results=r.data.results||[];
+  var status=String(test.Status||'').toUpperCase();
+
+  var html=header('Test — '+test.Title,'ID '+test.TestID+' · Status '+status);
+  html+='<div class="arow"><button class="btn ghost" id="te_back">← Back to Tests</button></div>';
+
+  html+='<div class="panel"><div class="ptitle">External Google Form</div><div class="fgrid">'+
+    fg('Form URL (responder, https)','te_formUrl','text',{full:true,value:test.FormURL||'',placeholder:'https://docs.google.com/forms/d/e/…/viewform'})+
+    fg('Form ID or Edit URL','te_formId','text',{full:true,value:test.FormID||'',placeholder:'raw Form ID or https://docs.google.com/forms/d/<ID>/edit',hint:'Backend stores only the raw Form ID. forms.gle is not accepted.'})+
+  '</div><div class="arow mt16"><button class="btn gold" id="te_link">Link Form</button></div></div>';
+
+  var allowedNext=[];
+  if(status==='DRAFT')allowedNext=['AVAILABLE'];
+  else if(status==='AVAILABLE')allowedNext=['CLOSED'];
+  var tbtns=allowedNext.map(function(n){return '<button class="btn" data-status="'+n+'">Move → '+n+'</button>';}).join('')||'<span class="quiet">No further manual transitions available.</span>';
+
+  html+='<div class="panel"><div class="ptitle">Lifecycle</div><div class="arow">'+tbtns+'</div>'+
+    '<div class="quiet">Strict: DRAFT → AVAILABLE → CLOSED → PUBLISHED. PUBLISHED is set by the publication workflow.</div></div>';
+
+  html+='<div class="panel"><div class="ptitle">Sync &amp; Publish</div><div class="arow">'+
+    '<button class="btn" id="te_sync">Sync Form Responses</button>'+
+    '<button class="btn gold" id="te_publish">Publish Submitted Results</button>'+
+  '</div><div class="quiet">Missing scores are rejected — never silently zeroed.</div></div>';
+
+  html+='<div class="panel"><div class="ptitle">Attempts ('+attempts.length+')</div>';
+  if(!attempts.length)html+=emptyState('No attempts yet.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>Attempt</th><th>Student</th><th>Token</th><th>Status</th><th>Started</th><th>Submitted</th></tr></thead><tbody>';
+    attempts.forEach(function(a){
+      html+='<tr><td class="mono">'+esc(a.AttemptID)+'</td><td>'+esc(a.StudentID)+'</td><td class="mono">'+esc(a.Token)+'</td><td>'+badge(a.Status||'')+'</td><td>'+esc(a.StartedAt||'')+'</td><td>'+esc(a.SubmittedAt||'')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+
+  html+='<div class="panel"><div class="ptitle">Results ('+results.length+')</div>';
+  if(!results.length)html+=emptyState('No results yet.');
+  else{
+    html+='<div class="twrap"><table class="tbl"><thead><tr><th>Result</th><th>Student</th><th>Obtained</th><th>Max</th><th>%</th><th>Publication</th></tr></thead><tbody>';
+    results.forEach(function(x){
+      html+='<tr><td class="mono">'+esc(x.ResultID)+'</td><td>'+esc(x.StudentID)+'</td><td>'+esc(x.MarksObtained)+'</td><td>'+esc(x.MaxMarks)+'</td><td>'+esc(x.Percentage)+'</td><td>'+badge(x.PublicationStatus||'')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  content.innerHTML=html;
+
+  document.getElementById('te_back').onclick=function(){render('tests');};
+  document.getElementById('te_link').onclick=async function(){
+    var url=val('te_formUrl'),fid=val('te_formId');
+    if(!url||!fid)return toast('Form URL and Form ID/Edit URL required.','error');
+    var r2=await apiCall('adminSetTestForm',{testId:testId,formUrl:url,formId:fid});
+    if(!r2.ok)return toast(r2.error||'Link failed.','error');
+    toast('Form linked.','ok');openTestEditor(testId);
+  };
+  content.querySelectorAll('button[data-status]').forEach(function(b){
+    b.onclick=async function(){
+      var st=b.getAttribute('data-status');
+      if(!confirm('Move test to '+st+'?'))return;
+      var r2=await apiCall('adminSetTestStatus',{testId:testId,status:st});
+      if(!r2.ok)return toast(r2.error||'Failed.','error');
+      toast('Status → '+st,'ok');openTestEditor(testId);
+    };
+  });
+  document.getElementById('te_sync').onclick=async function(){
+    if(!confirm('Sync Google Form responses?'))return;
+    var r2=await apiCall('adminSyncSubmissions',{testId:testId});
+    if(!r2.ok)return toast(r2.error||'Sync failed.','error');
+    toast('Synced. Processed: '+(r2.data.processed||0)+', Rejected: '+(r2.data.rejected||0),'ok');
+    openTestEditor(testId);
+  };
+  document.getElementById('te_publish').onclick=async function(){
+    if(!confirm('Publish all SUBMITTED attempts?'))return;
+    var r2=await apiCall('adminPublishResult',{testId:testId});
+    if(!r2.ok)return toast(r2.error||'Publish failed.','error');
+    toast('Published: '+(r2.data.published||0),'ok');
+    openTestEditor(testId);
+  };
+}
+
+/* ---------- RESULTS ---------- */
+VIEWS.results=async function(){
+  var r=await apiCall('adminListResults');
+  if(!r.ok)return errorState(r.error||'Failed to load.');
+  var rows=(r.data&&r.data.results)||[];
+  var html=header('Results','All results across tests.');
+  if(!rows.length){content.innerHTML=html+emptyState('No results yet.');return;}
+  html+='<div class="twrap"><table class="tbl"><thead><tr><th>Result</th><th>Student</th><th>Test</th><th>Obtained</th><th>Max</th><th>%</th><th>Publication</th></tr></thead><tbody>';
+  rows.forEach(function(x){
+    html+='<tr><td class="mono">'+esc(x.ResultID)+'</td><td>'+esc(x.StudentID)+'</td><td>'+esc(x.TestID)+'</td><td>'+esc(x.MarksObtained)+'</td><td>'+esc(x.MaxMarks)+'</td><td>'+esc(x.Percentage)+'</td><td>'+badge(x.PublicationStatus||'')+'</td></tr>';
+  });
+  html+='</tbody></table></div>';
+  content.innerHTML=html;
+};
+
+/* ---------- REMARKS ---------- */
+VIEWS.remarks=async function(){
+  var rs=await apiCall('adminListStudents');
+  var students=(rs.ok&&rs.data&&rs.data.students)||[];
+  var html=header('Remarks','Write remarks for a student.');
+  html+='<div class="panel"><div class="ptitle">Add Remark</div><div class="fgrid">'+
+    fg('Student','rm_student','select',{options:rowsToOptions(students,'StudentID','Name','— Select —'),required:true})+
+    fg('Test ID (optional)','rm_test','text',{})+
+    fg('Subject ID (optional)','rm_subject','text',{})+
+    fg('Chapter ID (optional)','rm_chapter','text',{})+
+    fg('Remark','rm_text','textarea',{full:true,required:true})+
+  '</div><div class="arow mt16"><button class="btn gold" id="rm_create">Save Remark</button></div></div>';
+  content.innerHTML=html;
+  document.getElementById('rm_create').onclick=async function(){
+    var p={StudentID:val('rm_student'),TestID:val('rm_test'),SubjectID:val('rm_subject'),ChapterID:val('rm_chapter'),Text:val('rm_text')};
+    if(!p.StudentID||!p.Text)return toast('Student and text required.','error');
+    var r=await apiCall('adminAddRemark',p);
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Saved.','ok');render('remarks');
+  };
+};
+
+/* ---------- PASSWORD ---------- */
+VIEWS.password=async function(){
+  var html=header('Change Password','You will be signed out after changing your password.');
+  html+='<div class="panel"><div class="fgrid">'+
+    fg('New Password','ap_new','password',{required:true,minlength:6,hint:'Minimum 6 characters.'})+
+    fg('Confirm New Password','ap_conf','password',{required:true,minlength:6})+
+  '</div><div class="arow mt16"><button class="btn gold" id="ap_go">Change Password</button></div></div>';
+  content.innerHTML=html;
+  document.getElementById('ap_go').onclick=async function(){
+    var a=val('ap_new'),b=val('ap_conf');
+    if(a.length<6)return toast('Password must be at least 6 characters.','error');
+    if(a!==b)return toast('Passwords do not match.','error');
+    var r=await apiCall('adminPasswordChange',{newPassword:a});
+    if(!r.ok)return toast(r.error||'Failed.','error');
+    toast('Password changed. Please log in again.','ok');
+    clearSession();
+    setTimeout(function(){window.location.href='login.html';},1000);
+  };
+};
+
+render('dashboard');
+</script>
+</body>
+</html>el><input id="nsuBoard" value="CBSE"></div>' +
+    '</div>' +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="nsuCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="nsuSave">Create</button>' +
+    '</div>'
+  );
+  m.querySelector('#nsuCancel').addEventListener('click', closeModal);
+  m.querySelector('#nsuSave').addEventListener('click', function(){
+    var data = { Name: valTrim('#nsuName'), Class: valTrim('#nsuClass'), Board: valTrim('#nsuBoard') };
+    if (!data.Name){ toast('Name required', true); return; }
+    API.call('adminCreateSubject', data).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Created ' + r.data.SubjectID);
+      closeModal();
+      render();
+    });
+  });
+}
+
+function subjectEdit(s){
+  var m = modal(
+    '<h3>Edit ' + esc(s.SubjectID) + '</h3>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Name</label><input id="esuName" value="' + esc(s.Name) + '"></div></div>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Class</label><input id="esuClass" value="' + esc(s.Class) + '"></div>' +
+      '<div class="gpn-field"><label>Board</label><input id="esuBoard" value="' + esc(s.Board) + '"></div>' +
+    '</div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Status</label><select id="esuStatus">' +
+      ['ACTIVE','INACTIVE'].map(function(x){ return '<option' + (x === String(s.Status).toUpperCase() ? ' selected' : '') + '>' + x + '</option>'; }).join('') +
+    '</select></div></div>' +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="esuCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="esuSave">Save</button>' +
+    '</div>'
+  );
+  m.querySelector('#esuCancel').addEventListener('click', closeModal);
+  m.querySelector('#esuSave').addEventListener('click', function(){
+    var patch = { Name: valTrim('#esuName'), Class: valTrim('#esuClass'), Board: valTrim('#esuBoard'), Status: val('#esuStatus') };
+    API.call('adminUpdateSubject', { id: s.SubjectID, patch: patch }).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Saved');
+      closeModal();
+      render();
+    });
+  });
+}
+
+/* ── 10  CHAPTERS ──────────────────────────────────────────── */
+function viewChapters(){
+  return Promise.all([API.call('adminListChapters'), API.call('adminListSubjects')]).then(function(arr){
+    var cr = arr[0], sr = arr[1];
+    var v = el('view');
+    if (!cr.ok){ v.innerHTML = '<div class="gpn-err">' + esc(cr.error) + '</div>'; return; }
+    var chapters = cr.data.chapters || [];
+    var subjects = (sr.ok && sr.data.subjects) || [];
+    var sMap = {};
+    subjects.forEach(function(s){ sMap[s.SubjectID] = s.Name; });
+    state.cache.chapters = chapters;
+    state.cache.subjects = subjects;
+
+    v.innerHTML =
+      '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h1 class="gpn-h1">Chapters</h1>' +
+          '<button class="gpn-btn gold" id="btnNewChp">+ New Chapter</button>' +
+        '</div>' +
+        '<div class="gpn-table-wrap"><table class="gpn-table">' +
+          '<thead><tr><th>ID</th><th>Subject</th><th>Name</th><th>Number</th><th>Status</th><th>Actions</th></tr></thead>' +
+          '<tbody>' +
+            (chapters.length ? chapters.map(function(c){
+              return '<tr>' +
+                '<td class="nowrap">' + esc(c.ChapterID) + '</td>' +
+                '<td>' + esc(sMap[c.SubjectID] || c.SubjectID) + '</td>' +
+                '<td>' + esc(c.Name) + '</td>' +
+                '<td>' + esc(c.Number || '—') + '</td>' +
+                '<td>' + badge(c.Status) + '</td>' +
+                '<td><button class="gpn-btn sm ghost" data-edit="' + esc(c.ChapterID) + '">Edit</button></td>' +
+              '</tr>';
+            }).join('') : '<tr><td colspan="6" class="gpn-empty">No chapters.</td></tr>') +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>';
+
+    el('btnNewChp').addEventListener('click', function(){ chapterCreate(subjects); });
+    v.querySelectorAll('[data-edit]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var c = chapters.find(function(x){ return x.ChapterID === b.getAttribute('data-edit'); });
+        chapterEdit(c, subjects);
+      });
+    });
+  });
+}
+
+function chapterCreate(subjects){
+  if (!subjects.length){ toast('Create a subject first.', true); return; }
+  var opts = subjects.map(function(s){ return '<option value="' + esc(s.SubjectID) + '">' + esc(s.Name) + '</option>'; }).join('');
+  var m = modal(
+    '<h3>New Chapter</h3>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Subject</label><select id="nchSub">' + opts + '</select></div></div>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Name *</label><input id="nchName"></div>' +
+      '<div class="gpn-field"><label>Number</label><input id="nchNum"></div>' +
+    '</div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Description</label><textarea id="nchDesc"></textarea></div></div>' +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="nchCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="nchSave">Create</button>' +
+    '</div>'
+  );
+  m.querySelector('#nchCancel').addEventListener('click', closeModal);
+  m.querySelector('#nchSave').addEventListener('click', function(){
+    var data = {
+      SubjectID: val('#nchSub'), Name: valTrim('#nchName'),
+      Number: valTrim('#nchNum'), Description: valTrim('#nchDesc')
+    };
+    if (!data.Name){ toast('Name required', true); return; }
+    API.call('adminCreateChapter', data).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Created ' + r.data.ChapterID);
+      closeModal();
+      render();
+    });
+  });
+}
+
+function chapterEdit(c, subjects){
+  var opts = subjects.map(function(s){
+    return '<option value="' + esc(s.SubjectID) + '"' + (s.SubjectID === c.SubjectID ? ' selected' : '') + '>' + esc(s.Name) + '</option>';
+  }).join('');
+  var m = modal(
+    '<h3>Edit ' + esc(c.ChapterID) + '</h3>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Subject</label><select id="echSub">' + opts + '</select></div></div>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Name</label><input id="echName" value="' + esc(c.Name) + '"></div>' +
+      '<div class="gpn-field"><label>Number</label><input id="echNum" value="' + esc(c.Number || '') + '"></div>' +
+    '</div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Description</label><textarea id="echDesc">' + esc(c.Description || '') + '</textarea></div></div>' +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="echCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="echSave">Save</button>' +
+    '</div>'
+  );
+  m.querySelector('#echCancel').addEventListener('click', closeModal);
+  m.querySelector('#echSave').addEventListener('click', function(){
+    var patch = {
+      SubjectID: val('#echSub'), Name: valTrim('#echName'),
+      Number: valTrim('#echNum'), Description: valTrim('#echDesc')
+    };
+    API.call('adminUpdateChapter', { id: c.ChapterID, patch: patch }).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Saved');
+      closeModal();
+      render();
+    });
+  });
+}
+
+/* ── 11  ENROLMENTS ────────────────────────────────────────── */
+function viewEnrolments(){
+  return API.call('adminListEnrolments').then(function(r){
+    var v = el('view');
+    if (!r.ok){ v.innerHTML = '<div class="gpn-err">' + esc(r.error) + '</div>'; return; }
+    var enrol = r.data.enrolments || [];
+    state.cache.enrolments = enrol;
+
+    v.innerHTML =
+      '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h1 class="gpn-h1">Enrolments</h1></div>' +
+        '<p class="gpn-muted" style="margin:0 0 12px;">Manage access windows. Add new enrolments from the Students module.</p>' +
+        '<div class="gpn-table-wrap"><table class="gpn-table">' +
+          '<thead><tr><th>ID</th><th>Student</th><th>Programme</th><th>Subjects</th><th>Start</th><th>End</th><th>Status</th><th>Actions</th></tr></thead>' +
+          '<tbody>' +
+            (enrol.length ? enrol.map(function(e){
+              return '<tr>' +
+                '<td class="nowrap">' + esc(e.EnrolmentID) + '</td>' +
+                '<td class="nowrap">' + esc(e.StudentID) + '</td>' +
+                '<td class="nowrap">' + esc(e.ProgrammeID) + '</td>' +
+                '<td>' + esc(String(e.SubjectIDs || '').split(',').filter(Boolean).length) + '</td>' +
+                '<td>' + esc(fmtDate(e.StartDate)) + '</td>' +
+                '<td>' + esc(fmtDate(e.EndDate)) + '</td>' +
+                '<td>' + badge(e.Status) + '</td>' +
+                '<td><button class="gpn-btn sm ghost" data-edit="' + esc(e.EnrolmentID) + '">Edit</button></td>' +
+              '</tr>';
+            }).join('') : '<tr><td colspan="8" class="gpn-empty">No enrolments.</td></tr>') +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>';
+
+    v.querySelectorAll('[data-edit]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var e = enrol.find(function(x){ return x.EnrolmentID === b.getAttribute('data-edit'); });
+        enrolmentEdit(e);
+      });
+    });
+  });
+}
+
+function enrolmentEdit(e){
+  var m = modal(
+    '<h3>Edit Enrolment ' + esc(e.EnrolmentID) + '</h3>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Start Date</label><input type="date" id="eeStart" value="' + esc(String(e.StartDate || '').substring(0,10)) + '"></div>' +
+      '<div class="gpn-field"><label>End Date</label><input type="date" id="eeEnd" value="' + esc(String(e.EndDate || '').substring(0,10)) + '"></div>' +
+    '</div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Status</label><select id="eeStatus">' +
+      ['ACTIVE','SUSPENDED','EXPIRED','CANCELLED'].map(function(x){
+        return '<option' + (x === String(e.Status).toUpperCase() ? ' selected' : '') + '>' + x + '</option>';
+      }).join('') +
+    '</select></div></div>' +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="eeCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="eeSave">Save</button>' +
+    '</div>'
+  );
+  m.querySelector('#eeCancel').addEventListener('click', closeModal);
+  m.querySelector('#eeSave').addEventListener('click', function(){
+    var patch = { StartDate: val('#eeStart'), EndDate: val('#eeEnd'), Status: val('#eeStatus') };
+    API.call('adminUpdateEnrolment', { id: e.EnrolmentID, patch: patch }).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Saved');
+      closeModal();
+      render();
+    });
+  });
+}
+
+/* ── 12  MATERIALS ─────────────────────────────────────────── */
+function viewMaterials(){
+  return Promise.all([
+    API.call('adminListMaterials'),
+    API.call('adminListSubjects'),
+    API.call('adminListChapters'),
+    API.call('adminListProgrammes'),
+    API.call('adminMaterialUsage')
+  ]).then(function(arr){
+    var mr = arr[0], sr = arr[1], cr = arr[2], pr = arr[3], ur = arr[4];
+    var v = el('view');
+    if (!mr.ok){ v.innerHTML = '<div class="gpn-err">' + esc(mr.error) + '</div>'; return; }
+    var mats = mr.data.materials || [];
+    var subjects = (sr.ok && sr.data.subjects) || [];
+    var chapters = (cr.ok && cr.data.chapters) || [];
+    var programmes = (pr.ok && pr.data.programmes) || [];
+    var usage = (ur.ok && ur.data.usage) || {};
+    var sMap = {}; subjects.forEach(function(s){ sMap[s.SubjectID] = s.Name; });
+    var cMap = {}; chapters.forEach(function(c){ cMap[c.ChapterID] = c.Name; });
+    var pMap = {}; programmes.forEach(function(p){ pMap[p.ProgrammeID] = p.Name; });
+
+    state.cache.materials = mats;
+    state.cache.subjects = subjects;
+    state.cache.chapters = chapters;
+    state.cache.programmes = programmes;
+
+    v.innerHTML =
+      '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h1 class="gpn-h1">Materials</h1>' +
+          '<button class="gpn-btn gold" id="btnNewMat">+ New Material</button>' +
+        '</div>' +
+        '<p class="gpn-muted" style="margin:0 0 12px;">Use <code>r2://</code> prefix for private R2 objects or paste an external URL.</p>' +
+        '<div class="gpn-table-wrap"><table class="gpn-table">' +
+          '<thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Subject</th><th>Chapter</th><th>Programme</th><th>Opened</th><th>Status</th><th>Actions</th></tr></thead>' +
+          '<tbody>' +
+            (mats.length ? mats.map(function(m){
+              var u = usage[m.MaterialID];
+              return '<tr>' +
+                '<td class="nowrap">' + esc(m.MaterialID) + '</td>' +
+                '<td>' + esc(m.Title) + '</td>' +
+                '<td>' + esc(m.Type) + '</td>' +
+                '<td>' + esc(sMap[m.SubjectID] || '—') + '</td>' +
+                '<td>' + esc(cMap[m.ChapterID] || '—') + '</td>' +
+                '<td>' + esc(pMap[m.ProgrammeID] || '—') + '</td>' +
+                '<td>' + (u ? u.opened : 0) + '</td>' +
+                '<td>' + badge(m.Status) + '</td>' +
+                '<td><button class="gpn-btn sm ghost" data-edit="' + esc(m.MaterialID) + '">Edit</button></td>' +
+              '</tr>';
+            }).join('') : '<tr><td colspan="9" class="gpn-empty">No materials.</td></tr>') +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>';
+
+    el('btnNewMat').addEventListener('click', function(){ materialCreate(subjects, chapters, programmes); });
+    v.querySelectorAll('[data-edit]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var m = mats.find(function(x){ return x.MaterialID === b.getAttribute('data-edit'); });
+        materialEdit(m, subjects, chapters, programmes);
+      });
+    });
+  });
+}
+
+function materialFormHtml(subjects, chapters, programmes, m){
+  var sOpts = '<option value="">— none —</option>' + subjects.map(function(s){
+    return '<option value="' + esc(s.SubjectID) + '"' + (m && s.SubjectID === m.SubjectID ? ' selected' : '') + '>' + esc(s.Name) + '</option>';
+  }).join('');
+  var cOpts = '<option value="">— none —</option>' + chapters.map(function(c){
+    return '<option value="' + esc(c.ChapterID) + '"' + (m && c.ChapterID === m.ChapterID ? ' selected' : '') + '>' + esc(c.Name) + '</option>';
+  }).join('');
+  var pOpts = '<option value="">— none —</option>' + programmes.map(function(p){
+    return '<option value="' + esc(p.ProgrammeID) + '"' + (m && p.ProgrammeID === m.ProgrammeID ? ' selected' : '') + '>' + esc(p.Name) + '</option>';
+  }).join('');
+  return '<div class="gpn-form-row"><div class="gpn-field"><label>Title *</label><input id="fmTitle" value="' + esc(m ? m.Title : '') + '"></div></div>' +
+    '<div class="gpn-form-row three">' +
+      '<div class="gpn-field"><label>Type</label><select id="fmType">' +
+        ['PDF','Notes','Worksheet','Video','Link'].map(function(t){ return '<option' + (m && t === m.Type ? ' selected' : '') + '>' + t + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div class="gpn-field"><label>Class</label><input id="fmClass" value="' + esc(m ? m.Class : '10') + '"></div>' +
+      '<div class="gpn-field"><label>Status</label><select id="fmStatus"><option' + (m && m.Status === 'ACTIVE' ? ' selected' : '') + '>ACTIVE</option><option' + (m && m.Status === 'INACTIVE' ? ' selected' : '') + '>INACTIVE</option></select></div>' +
+    '</div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>URL (r2:// object key or https://…)</label><input id="fmURL" value="' + esc(m ? m.URL : '') + '" placeholder="r2://guides/maths/ch1.pdf"></div></div>' +
+    '<div class="gpn-form-row three">' +
+      '<div class="gpn-field"><label>Subject</label><select id="fmSub">' + sOpts + '</select></div>' +
+      '<div class="gpn-field"><label>Chapter</label><select id="fmChp">' + cOpts + '</select></div>' +
+      '<div class="gpn-field"><label>Programme</label><select id="fmProg">' + pOpts + '</select></div>' +
+    '</div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Description</label><textarea id="fmDesc">' + esc(m ? m.Description : '') + '</textarea></div></div>';
+}
+
+function readMaterialForm(){
+  return {
+    Title: valTrim('#fmTitle'), Type: val('#fmType'), Class: valTrim('#fmClass'),
+    Status: val('#fmStatus'), URL: valTrim('#fmURL'),
+    SubjectID: val('#fmSub'), ChapterID: val('#fmChp'), ProgrammeID: val('#fmProg'),
+    Description: valTrim('#fmDesc')
+  };
+}
+
+function materialCreate(subjects, chapters, programmes){
+  var m = modal(
+    '<h3>New Material</h3>' +
+    materialFormHtml(subjects, chapters, programmes, null) +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="fmCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="fmSave">Create</button>' +
+    '</div>'
+  );
+  m.querySelector('#fmCancel').addEventListener('click', closeModal);
+  m.querySelector('#fmSave').addEventListener('click', function(){
+    var data = readMaterialForm();
+    if (!data.Title){ toast('Title required', true); return; }
+    API.call('adminCreateMaterial', data).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Created ' + r.data.MaterialID);
+      closeModal();
+      render();
+    });
+  });
+}
+
+function materialEdit(mat, subjects, chapters, programmes){
+  var m = modal(
+    '<h3>Edit ' + esc(mat.MaterialID) + '</h3>' +
+    materialFormHtml(subjects, chapters, programmes, mat) +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="fmCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="fmSave">Save</button>' +
+    '</div>'
+  );
+  m.querySelector('#fmCancel').addEventListener('click', closeModal);
+  m.querySelector('#fmSave').addEventListener('click', function(){
+    var patch = readMaterialForm();
+    API.call('adminUpdateMaterial', { id: mat.MaterialID, patch: patch }).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Saved');
+      closeModal();
+      render();
+    });
+  });
+}
+
+/* ── 13  SCHEDULE ──────────────────────────────────────────── */
+/* FIX 4C: Schedule now loads chapters and exposes ChapterID + EndTime. */
+function viewSchedule(){
+  return Promise.all([
+    API.call('adminListSchedule'),
+    API.call('adminListSubjects'),
+    API.call('adminListProgrammes'),
+    API.call('adminListChapters')
+  ]).then(function(arr){
+    var sr = arr[0], subr = arr[1], pr = arr[2], cr = arr[3];
+    var v = el('view');
+    if (!sr.ok){ v.innerHTML = '<div class="gpn-err">' + esc(sr.error) + '</div>'; return; }
+    var items = sr.data.schedule || [];
+    var subjects = (subr.ok && subr.data.subjects) || [];
+    var programmes = (pr.ok && pr.data.programmes) || [];
+    var chapters = (cr.ok && cr.data.chapters) || [];
+    var sMap = {}; subjects.forEach(function(s){ sMap[s.SubjectID] = s.Name; });
+    var pMap = {}; programmes.forEach(function(p){ pMap[p.ProgrammeID] = p.Name; });
+    var cMap = {}; chapters.forEach(function(c){ cMap[c.ChapterID] = c.Name; });
+
+    state.cache.schedule = items;
+    state.cache.subjects = subjects;
+    state.cache.programmes = programmes;
+    state.cache.chapters = chapters;
+
+    v.innerHTML =
+      '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h1 class="gpn-h1">Schedule</h1>' +
+          '<button class="gpn-btn gold" id="btnNewSch">+ New Item</button>' +
+        '</div>' +
+        '<p class="gpn-muted" style="margin:0 0 12px;">Leave Student ID blank for a programme-wide task.</p>' +
+        '<div class="gpn-table-wrap"><table class="gpn-table">' +
+          '<thead><tr><th>ID</th><th>Type</th><th>Date</th><th>Time</th><th>Student</th><th>Programme</th><th>Subject</th><th>Chapter</th><th>Status</th><th>Actions</th></tr></thead>' +
+          '<tbody>' +
+            (items.length ? items.map(function(s){
+              var timeStr = (s.StartTime || '—') + (s.EndTime ? ' – ' + s.EndTime : '');
+              return '<tr>' +
+                '<td class="nowrap">' + esc(s.ScheduleID) + '</td>' +
+                '<td>' + esc(s.Type) + '</td>' +
+                '<td>' + esc(fmtDate(s.Date)) + '</td>' +
+                '<td>' + esc(timeStr) + '</td>' +
+                '<td>' + esc(s.StudentID || '—') + '</td>' +
+                '<td>' + esc(pMap[s.ProgrammeID] || '—') + '</td>' +
+                '<td>' + esc(sMap[s.SubjectID] || '—') + '</td>' +
+                '<td>' + esc(cMap[s.ChapterID] || '—') + '</td>' +
+                '<td>' + badge(s.Status) + '</td>' +
+                '<td><button class="gpn-btn sm ghost" data-edit="' + esc(s.ScheduleID) + '">Edit</button></td>' +
+              '</tr>';
+            }).join('') : '<tr><td colspan="10" class="gpn-empty">No schedule items.</td></tr>') +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>';
+
+    el('btnNewSch').addEventListener('click', function(){ scheduleCreate(subjects, programmes, chapters); });
+    v.querySelectorAll('[data-edit]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var s = items.find(function(x){ return x.ScheduleID === b.getAttribute('data-edit'); });
+        scheduleEdit(s, subjects, programmes, chapters);
+      });
+    });
+  });
+}
+
+function scheduleFormHtml(subjects, programmes, chapters, s){
+  var sOpts = '<option value="">— none —</option>' + subjects.map(function(x){
+    return '<option value="' + esc(x.SubjectID) + '"' + (s && x.SubjectID === s.SubjectID ? ' selected' : '') + '>' + esc(x.Name) + '</option>';
+  }).join('');
+  var pOpts = '<option value="">— none —</option>' + programmes.map(function(x){
+    return '<option value="' + esc(x.ProgrammeID) + '"' + (s && x.ProgrammeID === s.ProgrammeID ? ' selected' : '') + '>' + esc(x.Name) + '</option>';
+  }).join('');
+  var cOpts = '<option value="">— none —</option>' + (chapters || []).map(function(x){
+    return '<option value="' + esc(x.ChapterID) + '"' + (s && x.ChapterID === s.ChapterID ? ' selected' : '') + '>' + esc(x.Name) + '</option>';
+  }).join('');
+  return '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Type</label><select id="fsType">' +
+        ['Study','Practice','Test','Revision','Retest'].map(function(t){ return '<option' + (s && t === s.Type ? ' selected' : '') + '>' + t + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div class="gpn-field"><label>Status</label><select id="fsStatus">' +
+        ['ACTIVE','CANCELLED'].map(function(x){ return '<option' + (s && x === String(s.Status).toUpperCase() ? ' selected' : '') + '>' + x + '</option>'; }).join('') +
+      '</select></div>' +
+    '</div>' +
+    '<div class="gpn-form-row three">' +
+      '<div class="gpn-field"><label>Date</label><input type="date" id="fsDate" value="' + esc(s ? String(s.Date).substring(0,10) : todayStr()) + '"></div>' +
+      '<div class="gpn-field"><label>Start Time</label><input type="time" id="fsTime" value="' + esc(s ? (s.StartTime || '') : '') + '"></div>' +
+      '<div class="gpn-field"><label>End Time</label><input type="time" id="fsEndTime" value="' + esc(s ? (s.EndTime || '') : '') + '"></div>' +
+    '</div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Student ID (blank = programme-wide)</label><input id="fsStudent" value="' + esc(s ? s.StudentID : '') + '" placeholder="STU-0001"></div></div>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Programme</label><select id="fsProg">' + pOpts + '</select></div>' +
+      '<div class="gpn-field"><label>Subject</label><select id="fsSub">' + sOpts + '</select></div>' +
+    '</div>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Chapter</label><select id="fsChp">' + cOpts + '</select></div>' +
+      '<div class="gpn-field"><label>Reference (Test / Material ID)</label><input id="fsRef" value="' + esc(s ? s.RefID : '') + '" placeholder="TST-0001"></div>' +
+    '</div>';
+}
+
+function readScheduleForm(){
+  return {
+    Type: val('#fsType'), Status: val('#fsStatus'),
+    Date: val('#fsDate'), StartTime: val('#fsTime'), EndTime: val('#fsEndTime'),
+    StudentID: String(val('#fsStudent')).trim().toUpperCase(),
+    ProgrammeID: val('#fsProg'), SubjectID: val('#fsSub'), ChapterID: val('#fsChp'),
+    RefID: String(val('#fsRef')).trim().toUpperCase()
+  };
+}
+
+function scheduleCreate(subjects, programmes, chapters){
+  var m = modal(
+    '<h3>New Schedule Item</h3>' +
+    scheduleFormHtml(subjects, programmes, chapters, null) +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="fsCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="fsSave">Create</button>' +
+    '</div>'
+  );
+  m.querySelector('#fsCancel').addEventListener('click', closeModal);
+  m.querySelector('#fsSave').addEventListener('click', function(){
+    var data = readScheduleForm();
+    if (!data.Date || !data.Type){ toast('Date and Type required', true); return; }
+    API.call('adminCreateSchedule', data).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Created ' + r.data.ScheduleID);
+      closeModal();
+      render();
+    });
+  });
+}
+
+function scheduleEdit(s, subjects, programmes, chapters){
+  var m = modal(
+    '<h3>Edit ' + esc(s.ScheduleID) + '</h3>' +
+    scheduleFormHtml(subjects, programmes, chapters, s) +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="fsCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="fsSave">Save</button>' +
+    '</div>'
+  );
+  m.querySelector('#fsCancel').addEventListener('click', closeModal);
+  m.querySelector('#fsSave').addEventListener('click', function(){
+    var patch = readScheduleForm();
+    API.call('adminUpdateSchedule', { id: s.ScheduleID, patch: patch }).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Saved');
+      closeModal();
+      render();
+    });
+  });
+}
+
+/* ── 14  QUESTION BANK ─────────────────────────────────────── */
+/* FIX 4A: Question form now exposes Class, Topic and Status. */
+function viewQuestions(){
+  return Promise.all([API.call('adminListQuestions'), API.call('adminListSubjects'), API.call('adminListChapters')]).then(function(arr){
+    var qr = arr[0], sr = arr[1], cr = arr[2];
+    var v = el('view');
+    if (!qr.ok){ v.innerHTML = '<div class="gpn-err">' + esc(qr.error) + '</div>'; return; }
+    var qs = qr.data.questions || [];
+    var subjects = (sr.ok && sr.data.subjects) || [];
+    var chapters = (cr.ok && cr.data.chapters) || [];
+    var sMap = {}; subjects.forEach(function(s){ sMap[s.SubjectID] = s.Name; });
+
+    state.cache.questions = qs;
+    state.cache.subjects = subjects;
+    state.cache.chapters = chapters;
+
+    v.innerHTML =
+      '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h1 class="gpn-h1">Question Bank</h1>' +
+          '<button class="gpn-btn gold" id="btnNewQ">+ New Question</button>' +
+        '</div>' +
+        '<p class="gpn-muted" style="margin:0 0 12px;">Questions already deployed into a test cannot be edited.</p>' +
+        '<div class="gpn-table-wrap"><table class="gpn-table">' +
+          '<thead><tr><th>ID</th><th>Type</th><th>Question</th><th>Subject</th><th>Class</th><th>Topic</th><th>Marks</th><th>Difficulty</th><th>Status</th><th>Actions</th></tr></thead>' +
+          '<tbody>' +
+            (qs.length ? qs.map(function(q){
+              var short = String(q.Question || '').substring(0,60);
+              return '<tr>' +
+                '<td class="nowrap">' + esc(q.QuestionID) + '</td>' +
+                '<td>' + esc(q.Type) + '</td>' +
+                '<td>' + esc(short) + (String(q.Question || '').length > 60 ? '…' : '') + '</td>' +
+                '<td>' + esc(sMap[q.SubjectID] || '—') + '</td>' +
+                '<td>' + esc(q.Class || '—') + '</td>' +
+                '<td>' + esc(q.Topic || '—') + '</td>' +
+                '<td>' + esc(q.Marks) + '</td>' +
+                '<td>' + esc(q.Difficulty) + '</td>' +
+                '<td>' + badge(q.Status) + '</td>' +
+                '<td><button class="gpn-btn sm ghost" data-edit="' + esc(q.QuestionID) + '">Edit</button></td>' +
+              '</tr>';
+            }).join('') : '<tr><td colspan="10" class="gpn-empty">No questions.</td></tr>') +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>';
+
+    el('btnNewQ').addEventListener('click', function(){ questionCreate(subjects, chapters); });
+    v.querySelectorAll('[data-edit]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var q = qs.find(function(x){ return x.QuestionID === b.getAttribute('data-edit'); });
+        questionEdit(q, subjects, chapters);
+      });
+    });
+  });
+}
+
+function questionFormHtml(subjects, chapters, q){
+  var sOpts = '<option value="">— none —</option>' + subjects.map(function(x){
+    return '<option value="' + esc(x.SubjectID) + '"' + (q && x.SubjectID === q.SubjectID ? ' selected' : '') + '>' + esc(x.Name) + '</option>';
+  }).join('');
+  var cOpts = '<option value="">— none —</option>' + chapters.map(function(x){
+    return '<option value="' + esc(x.ChapterID) + '"' + (q && x.ChapterID === q.ChapterID ? ' selected' : '') + '>' + esc(x.Name) + '</option>';
+  }).join('');
+  var types = ['MCQ','Multiple Choice','Checkbox','Dropdown','Short Answer','Paragraph'];
+  return '<div class="gpn-form-row three">' +
+      '<div class="gpn-field"><label>Type</label><select id="fqType">' +
+        types.map(function(t){ return '<option' + (q && t === q.Type ? ' selected' : '') + '>' + t + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div class="gpn-field"><label>Marks</label><input id="fqMarks" type="number" min="1" value="' + esc(q ? q.Marks : 2) + '"></div>' +
+      '<div class="gpn-field"><label>Difficulty</label><select id="fqDiff">' +
+        ['Easy','Medium','Hard'].map(function(d){ return '<option' + (q && d === q.Difficulty ? ' selected' : '') + '>' + d + '</option>'; }).join('') +
+      '</select></div>' +
+    '</div>' +
+    '<div class="gpn-form-row three">' +
+      '<div class="gpn-field"><label>Class</label><input id="fqClass" value="' + esc(q ? (q.Class || '10') : '10') + '" placeholder="10"></div>' +
+      '<div class="gpn-field"><label>Subject</label><select id="fqSub">' + sOpts + '</select></div>' +
+      '<div class="gpn-field"><label>Chapter</label><select id="fqChp">' + cOpts + '</select></div>' +
+    '</div>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Topic</label><input id="fqTopic" value="' + esc(q ? (q.Topic || '') : '') + '" placeholder="e.g. Quadratic Equations"></div>' +
+      '<div class="gpn-field"><label>Status</label><select id="fqStatus">' +
+        ['ACTIVE','INACTIVE'].map(function(x){ return '<option' + (q && x === String(q.Status).toUpperCase() ? ' selected' : '') + '>' + x + '</option>'; }).join('') +
+      '</select></div>' +
+    '</div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Question *</label><textarea id="fqQ">' + esc(q ? q.Question : '') + '</textarea></div></div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Options (pipe-separated for objective types)</label><input id="fqOpts" placeholder="A|B|C|D" value="' + esc(q ? q.Options : '') + '"></div></div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Correct Answer (for objective)</label><input id="fqCorrect" value="' + esc(q ? q.CorrectAnswer : '') + '"></div></div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Model Answer (for descriptive)</label><textarea id="fqModel">' + esc(q ? q.ModelAnswer : '') + '</textarea></div></div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Explanation (optional)</label><textarea id="fqExp">' + esc(q ? q.Explanation : '') + '</textarea></div></div>';
+}
+
+function readQuestionForm(){
+  return {
+    Type: val('#fqType'),
+    Marks: Number(val('#fqMarks') || 1),
+    Difficulty: val('#fqDiff'),
+    Class: valTrim('#fqClass'),
+    SubjectID: val('#fqSub'),
+    ChapterID: val('#fqChp'),
+    Topic: valTrim('#fqTopic'),
+    Status: val('#fqStatus'),
+    Question: valTrim('#fqQ'),
+    Options: valTrim('#fqOpts'),
+    CorrectAnswer: valTrim('#fqCorrect'),
+    ModelAnswer: valTrim('#fqModel'),
+    Explanation: valTrim('#fqExp')
+  };
+}
+
+function questionCreate(subjects, chapters){
+  var m = modal(
+    '<h3>New Question</h3>' +
+    questionFormHtml(subjects, chapters, null) +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="fqCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="fqSave">Create</button>' +
+    '</div>', true
+  );
+  m.querySelector('#fqCancel').addEventListener('click', closeModal);
+  m.querySelector('#fqSave').addEventListener('click', function(){
+    var data = readQuestionForm();
+    if (!data.Question){ toast('Question text required', true); return; }
+    API.call('adminCreateQuestion', data).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Created ' + r.data.QuestionID);
+      closeModal();
+      render();
+    });
+  });
+}
+
+function questionEdit(q, subjects, chapters){
+  var m = modal(
+    '<h3>Edit ' + esc(q.QuestionID) + '</h3>' +
+    questionFormHtml(subjects, chapters, q) +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="fqCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="fqSave">Save</button>' +
+    '</div>', true
+  );
+  m.querySelector('#fqCancel').addEventListener('click', closeModal);
+  m.querySelector('#fqSave').addEventListener('click', function(){
+    var patch = readQuestionForm();
+    API.call('adminUpdateQuestion', { id: q.QuestionID, patch: patch }).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Saved');
+      closeModal();
+      render();
+    });
+  });
+}
+
+/* ── 15  TESTS ─────────────────────────────────────────────── */
+/* FIX 2: AVAILABLE requires a FormID. */
+/* FIX 4B: Test form now exposes ChapterID. */
+function viewTests(){
+  return Promise.all([
+    API.call('adminListTests'),
+    API.call('adminListSubjects'),
+    API.call('adminListProgrammes'),
+    API.call('adminListChapters')
+  ]).then(function(arr){
+    var tr = arr[0], sr = arr[1], pr = arr[2], cr = arr[3];
+    var v = el('view');
+    if (!tr.ok){ v.innerHTML = '<div class="gpn-err">' + esc(tr.error) + '</div>'; return; }
+    var tests = tr.data.tests || [];
+    var subjects = (sr.ok && sr.data.subjects) || [];
+    var programmes = (pr.ok && pr.data.programmes) || [];
+    var chapters = (cr.ok && cr.data.chapters) || [];
+    var sMap = {}; subjects.forEach(function(s){ sMap[s.SubjectID] = s.Name; });
+    var pMap = {}; programmes.forEach(function(p){ pMap[p.ProgrammeID] = p.Name; });
+
+    state.cache.tests = tests;
+    state.cache.subjects = subjects;
+    state.cache.programmes = programmes;
+    state.cache.chapters = chapters;
+
+    v.innerHTML =
+      '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h1 class="gpn-h1">Tests</h1>' +
+          '<button class="gpn-btn gold" id="btnNewTest">+ New Test</button>' +
+        '</div>' +
+        '<div class="gpn-table-wrap"><table class="gpn-table">' +
+          '<thead><tr><th>ID</th><th>Title</th><th>Subject</th><th>Programme</th><th>Marks</th><th>Status</th><th>Submissions</th><th>Pending</th><th>Actions</th></tr></thead>' +
+          '<tbody>' +
+            (tests.length ? tests.map(function(t){
+              return '<tr>' +
+                '<td class="nowrap">' + esc(t.TestID) + '</td>' +
+                '<td>' + esc(t.Title) + '</td>' +
+                '<td>' + esc(sMap[t.SubjectID] || '—') + '</td>' +
+                '<td>' + esc(pMap[t.ProgrammeID] || '—') + '</td>' +
+                '<td>' + esc(t.TotalMarks) + '</td>' +
+                '<td>' + badge(t.Status) + '</td>' +
+                '<td>' + (t.submissions || 0) + '</td>' +
+                '<td>' + (t.pendingManual ? '<span class="gpn-tag warn">' + t.pendingManual + '</span>' : '0') + '</td>' +
+                '<td><div class="gpn-row-actions">' +
+                  '<button class="gpn-btn sm ghost" data-manage="' + esc(t.TestID) + '">Manage</button>' +
+                  (t.FormID ? '<button class="gpn-btn sm ghost" data-sync="' + esc(t.TestID) + '">Sync</button>' : '') +
+                  '<button class="gpn-btn sm ghost" data-edit="' + esc(t.TestID) + '">Edit</button>' +
+                '</div></td>' +
+              '</tr>';
+            }).join('') : '<tr><td colspan="9" class="gpn-empty">No tests.</td></tr>') +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>';
+
+    el('btnNewTest').addEventListener('click', function(){ testCreate(subjects, programmes, chapters); });
+    v.querySelectorAll('[data-manage]').forEach(function(b){
+      b.addEventListener('click', function(){ testManage(b.getAttribute('data-manage')); });
+    });
+    v.querySelectorAll('[data-sync]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var btn = b; btn.disabled = true;
+        API.call('adminSyncSubmissions', { testId: b.getAttribute('data-sync') }).then(function(r){
+          btn.disabled = false;
+          if (!r.ok){ toast(r.error, true); return; }
+          toast('Synced: ' + r.data.processed + ' new, ' + r.data.rejected + ' rejected');
+          render();
+        });
+      });
+    });
+    v.querySelectorAll('[data-edit]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var t = tests.find(function(x){ return x.TestID === b.getAttribute('data-edit'); });
+        testEdit(t, subjects, programmes, chapters);
+      });
+    });
+  });
+}
+
+function testFormHtml(subjects, programmes, chapters, t){
+  var sOpts = '<option value="">— none —</option>' + subjects.map(function(x){
+    return '<option value="' + esc(x.SubjectID) + '"' + (t && x.SubjectID === t.SubjectID ? ' selected' : '') + '>' + esc(x.Name) + '</option>';
+  }).join('');
+  var pOpts = '<option value="">— none —</option>' + programmes.map(function(x){
+    return '<option value="' + esc(x.ProgrammeID) + '"' + (t && x.ProgrammeID === t.ProgrammeID ? ' selected' : '') + '>' + esc(x.Name) + '</option>';
+  }).join('');
+  var cOpts = '<option value="">— none —</option>' + (chapters || []).map(function(x){
+    return '<option value="' + esc(x.ChapterID) + '"' + (t && x.ChapterID === t.ChapterID ? ' selected' : '') + '>' + esc(x.Name) + '</option>';
+  }).join('');
+  return '<div class="gpn-form-row"><div class="gpn-field"><label>Title *</label><input id="ftTitle" value="' + esc(t ? t.Title : '') + '" placeholder="Science Ch 2 — Motion"></div></div>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Subject</label><select id="ftSub">' + sOpts + '</select></div>' +
+      '<div class="gpn-field"><label>Chapter</label><select id="ftChp">' + cOpts + '</select></div>' +
+    '</div>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Programme</label><select id="ftProg">' + pOpts + '</select></div>' +
+      '<div class="gpn-field"><label>Duration (min)</label><input id="ftDur" type="number" value="' + esc(t ? t.Duration : 60) + '"></div>' +
+    '</div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Status</label><select id="ftStatus">' +
+      ['DRAFT','SCHEDULED','AVAILABLE'].map(function(x){
+        return '<option' + (t && x === String(t.Status).toUpperCase() ? ' selected' : '') + '>' + x + '</option>';
+      }).join('') +
+    '</select></div></div>';
+}
+
+function readTestForm(){
+  return {
+    Title: valTrim('#ftTitle'),
+    SubjectID: val('#ftSub'),
+    ChapterID: val('#ftChp'),
+    ProgrammeID: val('#ftProg'),
+    Duration: Number(val('#ftDur') || 0),
+    Status: val('#ftStatus')
+  };
+}
+
+function testCreate(subjects, programmes, chapters){
+  var m = modal(
+    '<h3>New Test</h3>' +
+    testFormHtml(subjects, programmes, chapters, null) +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="ftCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="ftSave">Create</button>' +
+    '</div>'
+  );
+  m.querySelector('#ftCancel').addEventListener('click', closeModal);
+  m.querySelector('#ftSave').addEventListener('click', function(){
+    var data = readTestForm();
+    if (!data.Title){ toast('Title required', true); return; }
+    if (data.Status === 'AVAILABLE') {
+      toast('Generate the Google Form before making this test AVAILABLE.', true);
+      return;
+    }
+    API.call('adminCreateTest', data).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Created ' + r.data.TestID);
+      closeModal();
+      render();
+    });
+  });
+}
+
+function testEdit(t, subjects, programmes, chapters){
+  var m = modal(
+    '<h3>Edit ' + esc(t.TestID) + '</h3>' +
+    testFormHtml(subjects, programmes, chapters, t) +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="ftCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="ftSave">Save</button>' +
+    '</div>'
+  );
+  m.querySelector('#ftCancel').addEventListener('click', closeModal);
+  m.querySelector('#ftSave').addEventListener('click', function(){
+    var patch = readTestForm();
+    if (patch.Status === 'AVAILABLE' && !t.FormID) {
+      toast('Generate the Google Form before making this test AVAILABLE.', true);
+      return;
+    }
+    API.call('adminUpdateTest', { id: t.TestID, patch: patch }).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Saved');
+      closeModal();
+      render();
+    });
+  });
+}
+
+/* FIX 3: Save Questions button is disabled/hidden once FormID exists. */
+function testManage(testId){
+  Promise.all([API.call('adminGetTest', { id: testId }), API.call('adminListQuestions')]).then(function(arr){
+    var tr = arr[0], qr = arr[1];
+    if (!tr.ok){ toast(tr.error, true); return; }
+    var test = tr.data.test;
+    var current = (tr.data.questions || []).map(function(x){ return x.question.QuestionID; });
+    var qs = (qr.ok && qr.data.questions) || [];
+
+    var hasForm = !!test.FormID;
+
+    var lockNotice = hasForm
+      ? '<div class="gpn-lock-notice">🔒 The question set is locked because the Google Form has already been generated. To change questions, create a new test.</div>'
+      : '<p class="gpn-muted" style="margin:0 0 8px;font-size:.8rem;">Select the questions, then Save Questions. The Google Form can be generated afterwards.</p>';
+
+    var saveQBtn = hasForm
+      ? '<button class="gpn-btn" id="tmSaveQ" disabled title="Question set is locked">Save Questions (locked)</button>'
+      : '<button class="gpn-btn" id="tmSaveQ">Save Questions</button>';
+
+    var genBtn = hasForm
+      ? ''
+      : '<button class="gpn-btn gold" id="tmGenForm">Generate Form</button>';
+
+    var checkboxDisabled = hasForm ? ' disabled' : '';
+
+    var m = modal(
+      '<h3>' + esc(test.Title) + ' · ' + esc(test.TestID) + '</h3>' +
+      '<div class="gpn-kv" style="margin-bottom:14px;">' +
+        '<div><div class="k">Status</div><div class="v" style="font-size:.9rem;">' + esc(test.Status) + '</div></div>' +
+        '<div><div class="k">Total Marks</div><div class="v" style="font-size:.9rem;">' + esc(test.TotalMarks) + '</div></div>' +
+        '<div><div class="k">Duration</div><div class="v" style="font-size:.9rem;">' + esc(test.Duration) + ' min</div></div>' +
+        '<div><div class="k">Form</div><div class="v" style="font-size:.72rem;word-break:break-all;">' + (test.FormID ? esc(String(test.FormID).substring(0,18)) + '…' : '— none —') + '</div></div>' +
+      '</div>' +
+      '<h2 class="gpn-card-title">Questions in Test</h2>' +
+      lockNotice +
+      '<div style="max-height:280px;overflow-y:auto;border:1px solid var(--gpn-divider);border-radius:8px;padding:8px;margin-bottom:12px;">' +
+        (qs.length ? qs.map(function(q){
+          return '<label class="gpn-checkbox"><input type="checkbox" value="' + esc(q.QuestionID) + '"' + (current.indexOf(q.QuestionID) >= 0 ? ' checked' : '') + checkboxDisabled + '> ' +
+            '<span style="flex:1;">' + esc(String(q.Question || '').substring(0,90)) + '</span>' +
+            '<span class="gpn-dim">' + esc(q.Type) + ' · ' + esc(q.Marks) + 'm</span></label>';
+        }).join('') : '<div class="gpn-empty">No questions in bank yet.</div>') +
+      '</div>' +
+      '<h2 class="gpn-card-title">Google Form</h2>' +
+      '<p class="gpn-muted" style="margin:0 0 10px;font-size:.78rem;">' +
+        (hasForm
+          ? 'A form has been generated. Regenerating is disabled to protect existing attempts.'
+          : 'No form yet. Save questions first, then generate.') +
+      '</p>' +
+      (test.FormURL ? '<p class="gpn-muted" style="font-size:.72rem;word-break:break-all;">' + esc(test.FormURL) + '</p>' : '') +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn ghost" id="tmClose">Close</button>' +
+        saveQBtn +
+        genBtn +
+      '</div>', true
+    );
+
+    m.querySelector('#tmClose').addEventListener('click', closeModal);
+
+    if (!hasForm) {
+      var saveBtn = m.querySelector('#tmSaveQ');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function(){
+          var checked = Array.prototype.slice.call(m.querySelectorAll('input[type=checkbox]:checked')).map(function(c){ return c.value; });
+          if (!checked.length){ toast('Select at least one question.', true); return; }
+          var items = checked.map(function(qid, i){
+            var q = qs.find(function(x){ return x.QuestionID === qid; });
+            return { questionId: qid, marks: Number(q.Marks || 1), order: i+1 };
+          });
+          saveBtn.disabled = true;
+          API.call('adminSetTestQuestions', { testId: testId, items: items }).then(function(r){
+            saveBtn.disabled = false;
+            if (!r.ok){ toast(r.error, true); return; }
+            toast('Saved (' + r.data.totalMarks + ' marks)');
+            closeModal();
+            render();
+          });
+        });
+      }
+
+      var gen = m.querySelector('#tmGenForm');
+      if (gen) {
+        gen.addEventListener('click', function(){
+          gen.disabled = true;
+          API.call('adminGenerateForm', { testId: testId }).then(function(r){
+            gen.disabled = false;
+            if (!r.ok){ toast(r.error, true); return; }
+            toast('Form ready');
+            closeModal();
+            render();
+          });
+        });
+      }
+    }
+  });
+}
+
+/* ── 16  EVALUATION ────────────────────────────────────────── */
+function viewEvaluation(){
+  return API.call('adminPendingEvaluations').then(function(r){
+    var v = el('view');
+    if (!r.ok){ v.innerHTML = '<div class="gpn-err">' + esc(r.error) + '</div>'; return; }
+    var pending = r.data.pending || [];
+
+    v.innerHTML =
+      '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h1 class="gpn-h1">Evaluation Center</h1>' +
+          '<span class="gpn-tag ' + (pending.length ? 'warn' : 'ok') + '">' + pending.length + ' pending</span>' +
+        '</div>' +
+        (pending.length
+          ? '<div class="gpn-table-wrap"><table class="gpn-table"><thead><tr><th>Student</th><th>Test</th><th>Pending</th><th>Action</th></tr></thead><tbody>' +
+            pending.map(function(p){
+              return '<tr>' +
+                '<td>' + esc(p.StudentName) + '<div class="gpn-dim">' + esc(p.StudentID) + '</div></td>' +
+                '<td>' + esc(p.TestTitle) + '</td>' +
+                '<td><span class="gpn-tag warn">' + p.PendingCount + '</span></td>' +
+                '<td><button class="gpn-btn sm gold" data-eval="' + esc(p.AttemptID) + '">Evaluate</button></td>' +
+              '</tr>';
+            }).join('') + '</tbody></table></div>'
+          : '<div class="gpn-empty">No pending evaluations. 🎉</div>') +
+      '</div>';
+
+    v.querySelectorAll('[data-eval]').forEach(function(b){
+      b.addEventListener('click', function(){ openEvaluation(b.getAttribute('data-eval')); });
+    });
+  });
+}
+
+function openEvaluation(attemptId){
+  API.call('adminAttemptDetail', { attemptId: attemptId }).then(function(r){
+    if (!r.ok){ toast(r.error, true); return; }
+    var d = r.data;
+    var pendingAns = (d.answers || []).filter(function(a){ return String(a.Status) === 'PENDING_MANUAL'; });
+    if (!pendingAns.length){ toast('No pending answers.', true); return; }
+
+    var body = pendingAns.map(function(a, i){
+      return '<div class="gpn-answer">' +
+        '<div class="gpn-answer-label">Q' + (i+1) + '. ' + esc(a.QuestionText) + '</div>' +
+        '<div class="gpn-dim" style="margin-bottom:4px;">Student answer:</div>' +
+        '<div class="gpn-answer-box">' + esc(a.StudentAnswer || '—') + '</div>' +
+        (a.ModelAnswer ? '<div class="gpn-dim" style="margin-bottom:4px;">Model answer:</div>' +
+          '<div class="gpn-answer-model">' + esc(a.ModelAnswer) + '</div>' : '') +
+        '<div class="gpn-form-row two">' +
+          '<div class="gpn-field"><label>Marks (0 – ' + a.MaxMarks + ')</label><input type="number" id="em' + i + '" value="0" min="0" max="' + a.MaxMarks + '"></div>' +
+          '<div class="gpn-field"><label>Remark</label><input id="er' + i + '" placeholder="Optional"></div>' +
+        '</div>' +
+        '<input type="hidden" id="eq' + i + '" value="' + esc(a.QuestionID) + '">' +
+      '</div>';
+    }).join('');
+
+    var m = modal(
+      '<h3>Evaluate — ' + esc(d.student ? d.student.Name : '') + ' · ' + esc(d.test ? d.test.Title : '') + '</h3>' +
+      '<p class="gpn-muted" style="margin:0 0 12px;">' + pendingAns.length + ' descriptive answer(s) to grade.</p>' +
+      body +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn ghost" id="evCancel">Cancel</button>' +
+        '<button class="gpn-btn" id="evSave">Save All</button>' +
+        '<button class="gpn-btn gold" id="evPublish">Save &amp; Publish</button>' +
+      '</div>', true
+    );
+
+    m.querySelector('#evCancel').addEventListener('click', closeModal);
+
+    function saveAll(){
+      var chain = Promise.resolve(true);
+      pendingAns.forEach(function(a, i){
+        chain = chain.then(function(prev){
+          if (!prev) return false;
+          var marks = Number(val('#em' + i) || 0);
+          var remark = val('#er' + i);
+          var qid = val('#eq' + i);
+          var max = a.MaxMarks;
+          if (marks < 0 || marks > max) { toast('Marks for Q' + (i+1) + ' must be 0–' + max, true); return false; }
+          return API.call('adminSaveEvaluation', { attemptId: attemptId, questionId: qid, marks: marks, remark: remark })
+            .then(function(res){ if (!res.ok){ toast(res.error, true); return false; } return true; });
+        });
+      });
+      return chain;
+    }
+
+    m.querySelector('#evSave').addEventListener('click', function(){
+      saveAll().then(function(ok){
+        if (!ok) return;
+        toast('Saved');
+        closeModal();
+        render();
+      });
+    });
+
+    m.querySelector('#evPublish').addEventListener('click', function(){
+      saveAll().then(function(ok){
+        if (!ok) return;
+        API.call('adminPublishResult', { attemptId: attemptId }).then(function(res){
+          if (!res.ok){ toast(res.error, true); return; }
+          toast('Published: ' + res.data.MarksObtained + '/' + res.data.MaxMarks + ' (' + res.data.Percentage + '%)');
+          closeModal();
+          render();
+        });
+      });
+    });
+  });
+}
+
+/* ── 17  RESULTS ───────────────────────────────────────────── */
+function viewResults(){
+  return API.call('adminListResults').then(function(r){
+    var v = el('view');
+    if (!r.ok){ v.innerHTML = '<div class="gpn-err">' + esc(r.error) + '</div>'; return; }
+    var results = r.data.results || [];
+    state.cache.results = results;
+
+    v.innerHTML =
+      '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h1 class="gpn-h1">Results</h1></div>' +
+        '<div class="gpn-table-wrap"><table class="gpn-table">' +
+          '<thead><tr><th>Result</th><th>Student</th><th>Test</th><th>Attempt</th><th>Score</th><th>%</th><th>Status</th><th>Published</th></tr></thead>' +
+          '<tbody>' +
+            (results.length ? results.map(function(r){
+              return '<tr>' +
+                '<td class="nowrap">' + esc(r.ResultID) + '</td>' +
+                '<td class="nowrap">' + esc(r.StudentID) + '</td>' +
+                '<td class="nowrap">' + esc(r.TestID) + '</td>' +
+                '<td class="nowrap">' + esc(r.AttemptID || '—') + '</td>' +
+                '<td>' + r.MarksObtained + '/' + r.MaxMarks + '</td>' +
+                '<td>' + r.Percentage + '%</td>' +
+                '<td>' + badge(r.PublicationStatus) + '</td>' +
+                '<td class="nowrap">' + esc(fmtDate(r.PublishedDate)) + '</td>' +
+              '</tr>';
+            }).join('') : '<tr><td colspan="8" class="gpn-empty">No results yet.</td></tr>') +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>';
+  });
+}
+
+/* ── 18  ANALYTICS ─────────────────────────────────────────── */
+function viewAnalytics(){
+  return API.call('adminAnalytics').then(function(r){
+    var v = el('view');
+    if (!r.ok){ v.innerHTML = '<div class="gpn-err">' + esc(r.error) + '</div>'; return; }
+    var students = (r.data.students || []).filter(function(s){ return s.tests > 0; });
+
+    v.innerHTML =
+      '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h1 class="gpn-h1">Analytics</h1></div>' +
+        '<p class="gpn-muted" style="margin:0 0 12px;">' + students.length + ' student(s) with published results.</p>' +
+        '<div class="gpn-table-wrap"><table class="gpn-table">' +
+          '<thead><tr><th>Student</th><th>Tests</th><th>Average</th><th>Highest</th><th>Lowest</th><th>Actions</th></tr></thead>' +
+          '<tbody>' +
+            (students.length ? students.map(function(s){
+              return '<tr>' +
+                '<td>' + esc(s.Name) + '<div class="gpn-dim">' + esc(s.StudentID) + '</div></td>' +
+                '<td>' + s.tests + '</td>' +
+                '<td>' + s.avg + '%</td>' +
+                '<td>' + s.highest + '%</td>' +
+                '<td>' + s.lowest + '%</td>' +
+                '<td><button class="gpn-btn sm ghost" data-drill="' + esc(s.StudentID) + '">Drill-down</button></td>' +
+              '</tr>';
+            }).join('') : '<tr><td colspan="6" class="gpn-empty">No data yet.</td></tr>') +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>';
+
+    v.querySelectorAll('[data-drill]').forEach(function(b){
+      b.addEventListener('click', function(){ analyticsDrillDown(b.getAttribute('data-drill')); });
+    });
+  });
+}
+
+function analyticsDrillDown(studentId){
+  API.call('adminStudentAnalytics', { studentId: studentId }).then(function(r){
+    if (!r.ok){ toast(r.error, true); return; }
+    var s = r.data.summary || {};
+    var bySub = r.data.bySubject || [];
+    var bySubHtml = bySub.length
+      ? '<div class="gpn-table-wrap"><table class="gpn-table"><thead><tr><th>Subject</th><th>Tests</th><th>Average</th></tr></thead><tbody>' +
+        bySub.map(function(b){ return '<tr><td>' + esc(b.name) + '</td><td>' + b.tests + '</td><td>' + b.avg + '%</td></tr>'; }).join('') + '</tbody></table></div>'
+      : '<div class="gpn-empty">No subject-level data.</div>';
+
+    var m = modal(
+      '<h3>' + esc(studentId) + ' — Performance</h3>' +
+      '<div class="gpn-kv" style="margin-bottom:14px;">' +
+        '<div><div class="k">Average</div><div class="v">' + s.avg + '%</div></div>' +
+        '<div><div class="k">Tests</div><div class="v">' + s.tests + '</div></div>' +
+        '<div><div class="k">Highest</div><div class="v">' + s.highest + '%</div></div>' +
+        '<div><div class="k">Lowest</div><div class="v">' + s.lowest + '%</div></div>' +
+      '</div>' +
+      '<h2 class="gpn-card-title">By Subject</h2>' + bySubHtml +
+      '<div class="gpn-modal-actions"><button class="gpn-btn ghost" id="ddClose">Close</button></div>',
+      true
+    );
+    m.querySelector('#ddClose').addEventListener('click', closeModal);
+  });
+}
+
+/* ── 19  PAYMENTS ──────────────────────────────────────────── */
+function viewPayments(){
+  return API.call('adminListPayments').then(function(r){
+    var v = el('view');
+    if (!r.ok){ v.innerHTML = '<div class="gpn-err">' + esc(r.error) + '</div>'; return; }
+    var payments = r.data.payments || [];
+
+    v.innerHTML =
+      '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h1 class="gpn-h1">Payments / Access</h1>' +
+          '<button class="gpn-btn gold" id="btnNewPay">+ Record Payment</button>' +
+        '</div>' +
+        '<p class="gpn-muted" style="margin:0 0 12px;">Manual payment records. Access is governed by enrolments.</p>' +
+        '<div class="gpn-table-wrap"><table class="gpn-table">' +
+          '<thead><tr><th>ID</th><th>Student</th><th>Programme</th><th>Amount</th><th>Date</th><th>Access Until</th><th>Status</th></tr></thead>' +
+          '<tbody>' +
+            (payments.length ? payments.map(function(p){
+              return '<tr>' +
+                '<td class="nowrap">' + esc(p.PaymentID) + '</td>' +
+                '<td class="nowrap">' + esc(p.StudentID) + '</td>' +
+                '<td>' + esc(p.ProgrammeID || '—') + '</td>' +
+                '<td>' + esc(p.Amount || 0) + '</td>' +
+                '<td>' + esc(fmtDate(p.PaymentDate)) + '</td>' +
+                '<td>' + esc(fmtDate(p.EndDate)) + '</td>' +
+                '<td>' + badge(p.Status) + '</td>' +
+              '</tr>';
+            }).join('') : '<tr><td colspan="7" class="gpn-empty">No payments recorded.</td></tr>') +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>';
+
+    el('btnNewPay').addEventListener('click', paymentCreate);
+  });
+}
+
+function paymentCreate(){
+  var m = modal(
+    '<h3>Record Payment</h3>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Student ID</label><input id="npStu" placeholder="STU-0001"></div>' +
+      '<div class="gpn-field"><label>Programme ID</label><input id="npProg" placeholder="PRG-0001"></div>' +
+    '</div>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Amount</label><input id="npAmt" type="number" value="0"></div>' +
+      '<div class="gpn-field"><label>Payment Date</label><input type="date" id="npDate" value="' + todayStr() + '"></div>' +
+    '</div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Reference</label><input id="npRef" placeholder="UPI / Receipt no."></div></div>' +
+    '<div class="gpn-form-row two">' +
+      '<div class="gpn-field"><label>Access Start</label><input type="date" id="npStart" value="' + todayStr() + '"></div>' +
+      '<div class="gpn-field"><label>Access End</label><input type="date" id="npEnd"></div>' +
+    '</div>' +
+    '<div class="gpn-form-row"><div class="gpn-field"><label>Notes</label><textarea id="npNotes"></textarea></div></div>' +
+    '<div class="gpn-modal-actions">' +
+      '<button class="gpn-btn ghost" id="npCancel">Cancel</button>' +
+      '<button class="gpn-btn gold" id="npSave">Save</button>' +
+    '</div>'
+  );
+  m.querySelector('#npCancel').addEventListener('click', closeModal);
+  m.querySelector('#npSave').addEventListener('click', function(){
+    var data = {
+      StudentID: String(val('#npStu')).trim().toUpperCase(),
+      ProgrammeID: String(val('#npProg')).trim().toUpperCase(),
+      Amount: Number(val('#npAmt') || 0),
+      PaymentDate: val('#npDate'),
+      Reference: valTrim('#npRef'),
+      StartDate: val('#npStart'),
+      EndDate: val('#npEnd'),
+      Status: 'PAID',
+      Notes: valTrim('#npNotes')
+    };
+    if (!data.StudentID){ toast('Student ID required', true); return; }
+    API.call('adminCreatePayment', data).then(function(r){
+      if (!r.ok){ toast(r.error, true); return; }
+      toast('Recorded ' + r.data.PaymentID);
+      closeModal();
+      render();
+    });
+  });
+}
+
+/* ── 20  ACTIVITY ──────────────────────────────────────────── */
+function viewActivity(){
+  return API.call('adminActivity').then(function(r){
+    var v = el('view');
+    if (!r.ok){ v.innerHTML = '<div class="gpn-err">' + esc(r.error) + '</div>'; return; }
+    var activity = r.data.activity || [];
+
+    v.innerHTML =
+      '<div class="gpn-card">' +
+        '<div class="gpn-card-head">' +
+          '<h1 class="gpn-h1">Activity Log</h1>' +
+          '<span class="gpn-dim">' + activity.length + ' recent events</span>' +
+        '</div>' +
+        '<div class="gpn-table-wrap"><table class="gpn-table">' +
+          '<thead><tr><th>Time</th><th>User</th><th>Role</th><th>Action</th><th>Entity</th><th>Description</th></tr></thead>' +
+          '<tbody>' +
+            (activity.length ? activity.map(function(a){
+              return '<tr>' +
+                '<td class="nowrap">' + esc(fmtDT(a.Timestamp)) + '</td>' +
+                '<td class="nowrap">' + esc(a.UserID) + '</td>' +
+                '<td>' + esc(a.Role) + '</td>' +
+                '<td>' + esc(a.Action) + '</td>' +
+                '<td class="nowrap">' + esc(a.EntityType + (a.EntityID ? ' · ' + a.EntityID : '')) + '</td>' +
+                '<td class="gpn-dim">' + esc(a.Description || '') + '</td>' +
+              '</tr>';
+            }).join('') : '<tr><td colspan="6" class="gpn-empty">No activity logged.</td></tr>') +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>';
+  });
+}
+
+/* ── 21  SETTINGS ──────────────────────────────────────────── */
+function viewSettings(){
+  var v = el('view');
+  var user = getSession().user || {};
+  v.innerHTML =
+    '<div class="gpn-card">' +
+      '<h1 class="gpn-h1">Settings</h1>' +
+      '<p class="gpn-muted" style="margin:4px 0 16px;">System information and administrative notes.</p>' +
+      '<div class="gpn-kv">' +
+        '<div><div class="k">Signed in as</div><div class="v" style="font-size:.9rem;">' + esc(user.name || '—') + '</div></div>' +
+        '<div><div class="k">Admin ID</div><div class="v" style="font-size:.9rem;">' + esc(user.id || '—') + '</div></div>' +
+        '<div><div class="k">App</div><div class="v" style="font-size:.9rem;">Guided Path One-on-One</div></div>' +
+        '<div><div class="k">Backend Version</div><div class="v" style="font-size:.9rem;">2.4.1</div></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="gpn-card">' +
+      '<h2 class="gpn-card-title">Administrative Notes</h2>' +
+      '<ul style="padding-left:20px;margin:0;font-size:.85rem;line-height:1.75;color:var(--gpn-muted);">' +
+        '<li>Reset a student password from the <strong>Students</strong> module.</li>' +
+        '<li>Generate the Google Form for a test from <strong>Tests → Manage</strong>, after saving the question set.</li>' +
+        '<li>Once a Google Form is generated, the question set is frozen — create a new test to change questions.</li>' +
+        '<li>A test cannot be made AVAILABLE until its Google Form has been generated.</li>' +
+        '<li>Sync submissions after students submit — use the <strong>Sync</strong> button on a test row.</li>' +
+        '<li>Publish results only from the <strong>Evaluation Center</strong> after all descriptive answers are graded.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="text-align:center;margin:20px 0;color:var(--gpn-dim);font-size:.72rem;">Guided Path Noida · Admin v2.4.1</div>';
+}
+
+/* ── 22  BOOT ──────────────────────────────────────────────── */
+(function boot(){
+  var s = getSession();
+  if (!s.token || s.role !== 'ADMIN') {
+    window.location.href = 'login.html';
+    return;
+  }
+  if (s.user && s.user.id) {
+    el('userChip').textContent = (s.user.name ? s.user.name + ' · ' : '') + s.user.id;
+  }
+  el('logoutBtn').addEventListener('click', function(){
+    confirmDialog('Sign out of the admin panel?').then(function(ok){
+      if (ok) doLogout();
+    });
+  });
+  render();
 })();
 </script>
 </body>

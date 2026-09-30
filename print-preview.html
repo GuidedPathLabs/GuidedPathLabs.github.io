@@ -1,1 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title id="pageTitle">Print Preview — Guided Path Noida</title>
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+  <style>
+    /* =========================================================
+       PRINT PREVIEW — screen-only chrome + print rules
+       ========================================================= */
 
+    /* Screen: toolbar is fixed at top, content flows below */
+    body {
+      background: #e8ecf1;
+      color: #1a1a1a;
+      margin: 0;
+      padding: 0;
+      font-family: 'Times New Roman', Georgia, serif;
+      min-height: 100dvh;
+    }
+
+    /* ---------- TOOLBAR (screen only) ---------- */
+    .print-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: #0a192f;
+      color: #e0e0e0;
+      padding: 10px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid rgba(0, 184, 212, 0.3);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      font-size: 0.82rem;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .print-toolbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: Georgia, serif;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #00b8d4;
+      margin-right: auto;
+    }
+
+    .print-toolbar-mark {
+      width: 26px;
+      height: 26px;
+      background: #061225;
+      border: 1.5px solid #00b8d4;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.62rem;
+      color: #00e5ff;
+      flex-shrink: 0;
+    }
+
+    .print-toolbar-title {
+      font-weight: 600;
+      color: #e0e0e0;
+      max-width: 40vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-right: auto;
+    }
+
+    .print-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-family: Georgia, serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      text-decoration: none;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+      min-height: 36px;
+    }
+
+    .print-btn-primary {
+      background: rgba(255, 213, 79, 0.1);
+      border-color: rgba(255, 213, 79, 0.5);
+      color: #ffd54f;
+    }
+    .print-btn-primary:hover {
+      background: rgba(255, 213, 79, 0.2);
+      border-color: #ffd54f;
+      color: #ffffff;
+    }
+
+    .print-btn-cyan {
+      background: rgba(0, 184, 212, 0.1);
+      border-color: rgba(0, 184, 212, 0.5);
+      color: #00e5ff;
+    }
+    .print-btn-cyan:hover {
+      background: rgba(0, 184, 212, 0.2);
+      border-color: #00e5ff;
+      color: #ffffff;
+    }
+
+    .print-btn-ghost {
+      background: transparent;
+      border-color: rgba(138, 155, 176, 0.3);
+      color: #b0c4d8;
+    }
+    .print-btn-ghost:hover {
+      border-color: #00b8d4;
+      color: #00e5ff;
+    }
+
+    /* ---------- CONTENT WRAPPER ---------- */
+    .print-content-wrap {
+      max-width: 900px;
+      margin: 20px auto 60px;
+      background: #ffffff;
+      padding: 40px 44px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      border-radius: 4px;
+      min-height: 400px;
+    }
+
+    /* ---------- INFO BAR for Save-as-PDF hint ---------- */
+    .print-hint {
+      max-width: 900px;
+      margin: 12px auto 0;
+      background: rgba(0, 184, 212, 0.08);
+      border: 1px solid rgba(0, 184, 212, 0.3);
+      border-left: 3px solid #00b8d4;
+      border-radius: 4px;
+      padding: 10px 16px;
+      color: #0a192f;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    .print-hint b { color: #0a192f; }
+
+    /* ---------- EMPTY / ERROR STATE ---------- */
+    .print-empty {
+      max-width: 500px;
+      margin: 80px auto;
+      text-align: center;
+      padding: 40px 24px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+    .print-empty h1 {
+      font-family: Georgia, serif;
+      font-size: 1.2rem;
+      color: #0a192f;
+      margin: 0 0 10px;
+    }
+    .print-empty p {
+      color: #5a6c80;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      margin: 0 0 20px;
+    }
+    .print-empty a {
+      color: #00b8d4;
+    }
+
+    /* ---------- HIDDEN UNTIL READY ---------- */
+    [hidden] { display: none !important; }
+
+    /* =========================================================
+       PRINT RULES — when user prints, hide the chrome, keep content
+       ========================================================= */
+    @media print {
+      body {
+        background: #ffffff !important;
+        color: #000000 !important;
+      }
+      .print-toolbar,
+      .print-hint,
+      .print-empty {
+        display: none !important;
+      }
+      .print-content-wrap {
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        min-height: 0 !important;
+      }
+      /* Some browsers honor @page for margins */
+      @page { margin: 15mm; }
+    }
+
+    /* =========================================================
+       MOBILE
+       ========================================================= */
+    @media (max-width: 640px) {
+      .print-toolbar {
+        padding: 8px 10px;
+        gap: 6px;
+        font-size: 0.75rem;
+      }
+      .print-toolbar-title {
+        max-width: 100%;
+        width: 100%;
+        order: 10;
+        margin-right: 0;
+        font-size: 0.72rem;
+      }
+      .print-toolbar-brand {
+        margin-right: 0;
+      }
+      .print-btn {
+        padding: 7px 10px;
+        font-size: 0.68rem;
+        min-height: 32px;
+      }
+      .print-content-wrap {
+        margin: 10px 8px 40px;
+        padding: 20px 16px;
+      }
+      .print-hint {
+        margin: 10px 8px 0;
+        font-size: 0.75rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     TOOLBAR (hidden when printing)
+     ============================================================ -->
+<div class="print-toolbar" id="toolbar" hidden>
+  <div class="print-toolbar-brand">
+    <div class="print-toolbar-mark">GPN</div>
+    <span>Print Preview</span>
+  </div>
+  <span class="print-toolbar-title" id="toolbarTitle">—</span>
+  <button class="print-btn print-btn-primary" id="btnPrint" type="button">
+    ⎙ Print again
+  </button>
+  <a class="print-btn print-btn-cyan" href="#" id="btnSaveHint" type="button">
+    ⬇ Save as PDF
+  </a>
+  <button class="print-btn print-btn-ghost" id="btnClose" type="button">
+    × Close
+  </button>
+</div>
+
+<!-- ============================================================
+     HINT BAR (Save as PDF instructions)
+     ============================================================ -->
+<div class="print-hint" id="hintBar" hidden>
+  <b>Tip:</b> To save as PDF, in the print dialog choose
+  <b>“Save as PDF”</b> (Chrome) or <b>“Microsoft Print to PDF”</b> (Windows)
+  or <b>“Save as PDF”</b> (Safari, macOS) as the destination. Then tap <b>Save</b>.
+</div>
+
+<!-- ============================================================
+     CONTENT WRAPPER — receives the HTML from sessionStorage
+     ============================================================ -->
+<div class="print-content-wrap" id="contentWrap" hidden></div>
+
+<!-- ============================================================
+     EMPTY / ERROR STATE
+     ============================================================ -->
+<div class="print-empty" id="emptyState" hidden>
+  <h1>Nothing to print</h1>
+  <p>
+    This page opens automatically when you click <b>Preview &amp; Print</b>
+    from the admin reports screen. It seems you reached this page directly,
+    or the print data was already consumed.
+  </p>
+  <p>
+    Please go back to <a href="admin-reports.html">Admin → Reports</a>
+    and click <b>Preview &amp; Print</b> on a report.
+  </p>
+</div>
+
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  var STORAGE_KEY_HTML  = 'gpn_print_html';
+  var STORAGE_KEY_TITLE = 'gpn_print_title';
+  var PRINT_DELAY_MS    = 350;   // wait this long before auto-print
+  var AUTO_CLOSE_MS     = 800;   // wait this long after print, then show Close
+
+  var htmlString = '';
+  var title      = 'Print';
+
+  GPN.ready(function () {
+    /* ----------------------------------------------------------
+     * 1. Read from sessionStorage (one-time use)
+     * -------------------------------------------------------- */
+    try {
+      htmlString = sessionStorage.getItem(STORAGE_KEY_HTML) || '';
+      title      = sessionStorage.getItem(STORAGE_KEY_TITLE) || 'Print';
+    } catch (e) {
+      console.error('sessionStorage read failed:', e);
+    }
+
+    /* ----------------------------------------------------------
+     * 2. Validate
+     * -------------------------------------------------------- */
+    if (!htmlString || !String(htmlString).trim()) {
+      showEmptyState();
+      return;
+    }
+
+    /* ----------------------------------------------------------
+     * 3. Set page title
+     * -------------------------------------------------------- */
+    try {
+      document.title = title + ' — GPN';
+    } catch (e) {}
+    var tEl = GPN.byId('pageTitle');
+    if (tEl) tEl.textContent = document.title;
+    var tBar = GPN.byId('toolbarTitle');
+    if (tBar) tBar.textContent = title;
+
+    /* ----------------------------------------------------------
+     * 4. Inject content
+     *    The htmlString is trusted — it was generated by our own
+     *    admin-reports.html via buildPrintDocument() and already
+     *    escapes all user data with esc_(). Safe to assign.
+     * -------------------------------------------------------- */
+    var wrap = GPN.byId('contentWrap');
+    wrap.innerHTML = htmlString;
+    wrap.hidden = false;
+
+    /* ----------------------------------------------------------
+     * 5. Show toolbar + hint
+     * -------------------------------------------------------- */
+    GPN.byId('toolbar').hidden = false;
+    GPN.byId('hintBar').hidden = false;
+
+    /* ----------------------------------------------------------
+     * 6. Wire buttons
+     * -------------------------------------------------------- */
+    GPN.on(GPN.byId('btnPrint'), 'click', triggerPrint);
+    GPN.on(GPN.byId('btnClose'), 'click', function () {
+      try { window.close(); } catch (e) {}
+      /* Fallback if close is blocked */
+      setTimeout(function () {
+        if (!window.closed) {
+          GPN.Toast && GPN.Toast.info
+            ? GPN.Toast.info('Close this tab manually if it does not close.')
+            : alert('Close this tab manually.');
+        }
+      }, 200);
+    });
+
+    /* Save-as-PDF hint button — scrolls to hint bar + triggers print */
+    GPN.on(GPN.byId('btnSaveHint'), 'click', function (e) {
+      e.preventDefault();
+      triggerPrint();
+    });
+
+    /* ----------------------------------------------------------
+     * 7. Clear sessionStorage now that we've consumed it
+     *    (so a manual reload shows the empty state, not stale data)
+     * -------------------------------------------------------- */
+    try {
+      sessionStorage.removeItem(STORAGE_KEY_HTML);
+      sessionStorage.removeItem(STORAGE_KEY_TITLE);
+    } catch (e) {}
+
+    /* ----------------------------------------------------------
+     * 8. Auto-trigger print dialog
+     * -------------------------------------------------------- */
+    setTimeout(triggerPrint, PRINT_DELAY_MS);
+  });
+
+
+  /* ==========================================================
+     TRIGGER PRINT
+     ========================================================== */
+  function triggerPrint() {
+    try {
+      window.focus();
+      window.print();
+    } catch (e) {
+      console.error('window.print failed:', e);
+      if (typeof GPN !== 'undefined' && GPN.Toast && GPN.Toast.error) {
+        GPN.Toast.error('Could not open the print dialog. Use your browser’s Print menu.');
+      } else {
+        alert('Could not open the print dialog. Use your browser’s Print menu.');
+      }
+    }
+  }
+
+
+  /* ==========================================================
+     EMPTY STATE
+     ========================================================== */
+  function showEmptyState() {
+    GPN.byId('emptyState').hidden = false;
+    GPN.byId('toolbar').hidden = true;
+    GPN.byId('hintBar').hidden = true;
+    GPN.byId('contentWrap').hidden = true;
+    document.title = 'Print Preview — Guided Path Noida';
+  }
+
+})();
+</script>
+</body>
+</html>

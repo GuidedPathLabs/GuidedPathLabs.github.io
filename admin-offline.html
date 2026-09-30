@@ -1,1 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Offline Management — GPN Admin</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body>
 
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">Offline <b>Management</b></div>
+    </div>
+    <div class="gpn-topbar-user">
+      <span class="gpn-user-badge" id="userBadge">—</span>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnLogout" type="button">Logout</button>
+    </div>
+  </header>
+
+  <nav class="gpn-navstrip">
+    <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
+    <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
+    <a class="gpn-navstrip-btn active" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-master.html">Master</a>
+    <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
+    <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
+    <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
+    <a class="gpn-navstrip-btn" href="admin-settings.html">Settings</a>
+  </nav>
+
+  <main class="gpn-main">
+
+    <div class="gpn-chips" id="subTabs">
+      <button class="gpn-chip active" data-view="overview">Overview</button>
+      <button class="gpn-chip" data-view="students">Students</button>
+      <button class="gpn-chip" data-view="batches">Batches</button>
+      <button class="gpn-chip" data-view="attendance">Attendance</button>
+      <button class="gpn-chip" data-view="tests">Tests</button>
+      <button class="gpn-chip" data-view="fees">Fees</button>
+      <button class="gpn-chip" data-view="files">Files</button>
+      <button class="gpn-chip" data-view="leaderboard">Leaderboard</button>
+    </div>
+
+    <div id="viewRoot">
+      <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+    </div>
+
+  </main>
+</div>
+
+<div class="gpn-modal" id="modalGeneric" hidden>
+  <div class="gpn-modal-card" id="modalGenericCard"></div>
+</div>
+
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  if (!GPN.Guard.requireAdmin()) return;
+
+  var viewRoot = null;
+  var appRoot  = null;
+
+  GPN.ready(function () {
+    appRoot  = GPN.byId('appRoot');
+    viewRoot = GPN.byId('viewRoot');
+
+    GPN.byId('userBadge').textContent = GPN.Session.getName() || 'Admin';
+    GPN.byId('userBadge').title = GPN.Session.getUser() || '';
+
+    GPN.$$('#subTabs .gpn-chip').forEach(function (btn) {
+      GPN.on(btn, 'click', function () {
+        GPN.$$('#subTabs .gpn-chip').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        render(btn.dataset.view);
+      });
+    });
+
+    GPN.on(GPN.byId('btnLogout'), 'click', function () {
+      if (confirm('Sign out?')) GPN.Guard.logout();
+    });
+
+    GPN.Modal.wire('modalGeneric');
+
+    appRoot.hidden = false;
+    GPN.byId('pageLoading').hidden = true;
+
+    render('overview');
+  });
+
+  function render(view) {
+    GPN.showContainerLoading(viewRoot, 'Loading…');
+    var fn = VIEWS[view] || VIEWS.overview;
+    Promise.resolve(fn()).catch(function (err) {
+      console.error(view, err);
+      GPN.showContainerError(viewRoot, 'Failed to load.');
+    });
+  }
+
+  function openModal(html, onReady) {
+    GPN.byId('modalGenericCard').innerHTML = html;
+    GPN.Modal.open('modalGeneric');
+    if (typeof onReady === 'function') setTimeout(onReady, 20);
+  }
+  function closeModal() { GPN.Modal.close('modalGeneric'); }
+
+  function esc(s) { return GPN.esc(s); }
+  function fmtDate(d) { return GPN.formatDate(d); }
+  function fmtCur(n) { return GPN.formatCurrency(n); }
+  function pill(text, tone) {
+    var cls = tone || String(text || '').toLowerCase().replace(/[^a-z]/g, '');
+    return '<span class="gpn-pill ' + esc(cls) + '">' + esc(text) + '</span>';
+  }
+  function classSelect(id, value) {
+    var opts = (window.GPN_CONFIG.CLASSES || []).map(function (c) {
+      return '<option value="' + esc(c) + '"' + (value === c ? ' selected' : '') + '>' + esc(c) + '</option>';
+    }).join('');
+    return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
+  }
+  function boardSelect(id, value) {
+    var opts = (window.GPN_CONFIG.BOARDS || []).map(function (b) {
+      return '<option value="' + esc(b) + '"' + (value === b ? ' selected' : '') + '>' + esc(b) + '</option>';
+    }).join('');
+    return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
+  }
+
+  var VIEWS = {};
+
+  VIEWS.overview = function () {
+    return GPN.api('adminOfflineOverview').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var d = j.data || {};
+      viewRoot.innerHTML =
+        '<div class="gpn-stats">' +
+          statCard('Total Students', d.totalStudents || 0) +
+          statCard('Active', d.activeStudents || 0, 'green') +
+          statCard('Inactive', d.inactiveStudents || 0, 'error') +
+          statCard('Active Batches', d.activeBatches || 0, 'gold') +
+          statCard('Active Files', d.activeFiles || 0) +
+          statCard('Marked Today', d.testsToday || 0) +
+          statCard('Fees Collected', fmtCur(d.feesCollected || 0), 'green') +
+          statCard('Fees Due', fmtCur(d.feesDue || 0), 'error') +
+        '</div>' +
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Quick Actions</h3></div>' +
+        '<div class="gpn-card-body"><div class="gpn-row">' +
+          '<button class="gpn-btn gpn-btn-cyan" data-goto="students">+ Add Student</button>' +
+          '<button class="gpn-btn gpn-btn-cyan" data-goto="attendance">Mark Attendance</button>' +
+          '<button class="gpn-btn gpn-btn-cyan" data-goto="fees">Fee Ledger</button>' +
+          '<button class="gpn-btn gpn-btn-cyan" data-goto="leaderboard">Leaderboard</button>' +
+        '</div></div></div>';
+
+      GPN.$$('button[data-goto]').forEach(function (b) {
+        GPN.on(b, 'click', function () { document.querySelector('#subTabs button[data-view="' + b.dataset.goto + '"]').click(); });
+      });
+    });
+  };
+  function statCard(label, value, tone) {
+    return '<div class="gpn-stat"><span class="gpn-stat-label">' + esc(label) + '</span><span class="gpn-stat-value ' + (tone || '') + '">' + esc(String(value)) + '</span></div>';
+  }
+
+  VIEWS.students = function () {
+    return GPN.api('adminOfflineListStudents').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var rows = (j.data && j.data.students) || [];
+
+      var html = '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Students (' + rows.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddOffStu">+ Add</button>' +
+        '</div><div class="gpn-card-body">' +
+        '<input class="gpn-search" id="offStuSearch" placeholder="Search by name, ID, phone…"></div>';
+
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No students yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>ID</th><th>Name</th><th>Class</th><th>Phone</th><th>Fees</th><th>Status</th><th></th></tr></thead><tbody id="offStuRows">';
+        rows.forEach(function (s) { html += offlineStudentRow(s); });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddOffStu'), 'click', addOfflineStudentModal);
+
+      var search = GPN.byId('offStuSearch');
+      if (search) GPN.on(search, 'input', GPN.debounce(function () {
+        var q = search.value.toLowerCase().trim();
+        GPN.$$('#offStuRows tr').forEach(function (tr) {
+          tr.style.display = (!q || (tr.dataset.search || '').toLowerCase().indexOf(q) >= 0) ? '' : 'none';
+        });
+      }, 150));
+
+      GPN.$$('#offStuRows button[data-act]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () {
+          var id = btn.dataset.id, act = btn.dataset.act;
+          if (act === 'view')     openOfflineStudent(id);
+          if (act === 'fees')     offlineFeesModal(id);
+          if (act === 'password') resetOfflinePasswordModal(id);
+          if (act === 'delete')   deleteOfflineStudent(id);
+        });
+      });
+    });
+  };
+
+  function offlineStudentRow(s) {
+    var search = [s.Name, s.StudentID, s.Phone].join(' ').toLowerCase();
+    var feesTone = String(s.FeesStatus || '').toLowerCase().replace(/\s/g, '-');
+    return '<tr data-search="' + esc(search) + '">' +
+      '<td data-label="ID" class="gpn-mono">' + esc(s.StudentID) + '</td>' +
+      '<td data-label="Name">' + esc(s.Name) + '</td>' +
+      '<td data-label="Class">' + esc(s.Class || '—') + '</td>' +
+      '<td data-label="Phone">' + esc(s.Phone || '—') + '</td>' +
+      '<td data-label="Fees">' + pill(s.FeesStatus || '—', feesTone) + '</td>' +
+      '<td data-label="Status">' + pill(s.Status || '—') + '</td>' +
+      '<td data-label="Actions">' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="view" data-id="' + esc(s.StudentID) + '">View</button> ' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="fees" data-id="' + esc(s.StudentID) + '">Fees</button> ' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="password" data-id="' + esc(s.StudentID) + '">Reset PW</button> ' +
+        '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-act="delete" data-id="' + esc(s.StudentID) + '">Delete</button>' +
+      '</td>' +
+    '</tr>';
+  }
+
+  function addOfflineStudentModal() {
+    var html =
+      '<h3 class="gpn-modal-title">Add Offline Student</h3>' +
+      '<p class="gpn-modal-sub">ID auto-generated as hq-&lt;firstname&gt;&lt;serial&gt;. Password defaults to phone digits.</p>' +
+      '<div class="gpn-field"><label class="gpn-label">Name</label><input id="ofName" class="gpn-input"></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Class</label>' + classSelect('ofClass') + '</div>' +
+        '<div class="gpn-field"><label class="gpn-label">Board</label>' + boardSelect('ofBoard') + '</div>' +
+      '</div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Phone</label><input id="ofPhone" class="gpn-input" inputmode="tel"><span class="gpn-hint">This becomes the default password.</span></div>' +
+        '<div class="gpn-field"><label class="gpn-label">WhatsApp</label><input id="ofWa" class="gpn-input" inputmode="tel" placeholder="Defaults to phone"></div>' +
+      '</div>' +
+      '<div class="gpn-field"><label class="gpn-label">Email</label><input id="ofEmail" class="gpn-input" inputmode="email"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">School</label><input id="ofSchool" class="gpn-input"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Location</label><input id="ofLocation" class="gpn-input"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Parent Name</label><input id="ofParent" class="gpn-input" placeholder="Optional"></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">DOJ</label><input id="ofDoj" class="gpn-input" type="date" value="' + GPN.todayISO() + '"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Fee (₹)</label><input id="ofFee" class="gpn-input" type="number"></div>' +
+      '</div>' +
+
+      '<div class="gpn-card" style="margin-top:14px;"><div class="gpn-card-head"><h3 class="gpn-card-title">Parent Account</h3></div>' +
+      '<div class="gpn-card-body">' +
+        '<div class="gpn-field"><label class="gpn-check"><input type="checkbox" id="ofCreateParent"> <span>Also create a parent login for this student</span></label></div>' +
+        '<div id="ofParentFields" style="display:none;margin-top:12px;">' +
+          '<div class="gpn-field"><label class="gpn-label">Parent Name</label><input id="ofParentName" class="gpn-input" placeholder="Auto-filled from student parent name if blank"></div>' +
+          '<div class="gpn-grid-2">' +
+            '<div class="gpn-field"><label class="gpn-label">Parent Phone</label><input id="ofParentPhone" class="gpn-input" inputmode="tel" placeholder="Defaults to student phone"><span class="gpn-hint">Becomes the parent\'s default password.</span></div>' +
+            '<div class="gpn-field"><label class="gpn-label">Parent Email</label><input id="ofParentEmail" class="gpn-input" inputmode="email" placeholder="Optional"></div>' +
+          '</div>' +
+          '<div class="gpn-quiet" style="font-size:0.75rem;">Parent will get a pr- ID and default password = parent phone digits.</div>' +
+        '</div>' +
+      '</div></div>' +
+
+      '<div id="ofError" class="gpn-alert gpn-alert-error" hidden style="margin-top:12px;"></div>' +
+      '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="ofCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="ofSave">Create</button></div>';
+
+    openModal(html, function () {
+      var cb = GPN.byId('ofCreateParent');
+      var fields = GPN.byId('ofParentFields');
+      GPN.on(cb, 'change', function () {
+        fields.style.display = cb.checked ? '' : 'none';
+        if (cb.checked) {
+          var pn = GPN.byId('ofParentName');
+          var pp = GPN.byId('ofParentPhone');
+          if (!pn.value) pn.value = GPN.byId('ofParent').value.trim();
+          if (!pp.value) pp.value = GPN.byId('ofPhone').value.trim();
+        }
+      });
+
+      GPN.on(GPN.byId('ofCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('ofSave'), 'click', function () {
+        var err = GPN.byId('ofError'); err.hidden = true;
+
+        var phone = GPN.byId('ofPhone').value.trim();
+        if (!phone) { err.textContent = 'Phone required (used as default password).'; err.hidden = false; return; }
+
+        var wantParent = cb.checked;
+        var pName = GPN.byId('ofParentName').value.trim();
+        var pPhone = GPN.byId('ofParentPhone').value.trim();
+        var pEmail = GPN.byId('ofParentEmail').value.trim();
+
+        if (wantParent && !pPhone) {
+          err.textContent = 'Parent phone required (used as parent default password).';
+          err.hidden = false; return;
+        }
+
+        var payload = {
+          Name: GPN.byId('ofName').value.trim(),
+          Class: GPN.byId('ofClass').value,
+          Board: GPN.byId('ofBoard').value,
+          Phone: phone,
+          WhatsApp: GPN.byId('ofWa').value.trim(),
+          Email: GPN.byId('ofEmail').value.trim(),
+          School: GPN.byId('ofSchool').value.trim(),
+          Location: GPN.byId('ofLocation').value.trim(),
+          ParentName: GPN.byId('ofParent').value.trim(),
+          DOJ: GPN.byId('ofDoj').value,
+          FeeAmount: GPN.byId('ofFee').value,
+          AlsoCreateParent: wantParent,
+          ParentName: pName || GPN.byId('ofParent').value.trim(),
+          ParentPhone: pPhone,
+          ParentEmail: pEmail
+        };
+        if (!payload.Name || !payload.DOJ) {
+          err.textContent = 'Name and DOJ required.'; err.hidden = false; return;
+        }
+        var btn = GPN.byId('ofSave');
+        GPN.setLoading(btn, true, 'Creating…');
+        GPN.api('adminOfflineCreateStudent', payload).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+
+          var msg = 'Student: ' + r.data.StudentID + ' · PW: ' + r.data.DefaultPassword;
+          if (r.data.Parent && r.data.Parent.ParentID) {
+            msg += ' · Parent: ' + r.data.Parent.ParentID + ' · PW: ' + r.data.Parent.DefaultPassword;
+          }
+          GPN.Toast.ok(msg);
+          closeModal(); render('students');
+        });
+      });
+    });
+  }
+
+  function openOfflineStudent(id) {
+    GPN.api('adminOfflineGetStudent', { id: id }).then(function (j) {
+      if (!j.ok) { GPN.Toast.error(GPN.friendlyError(j)); return; }
+      var d = j.data || {};
+      var s = d.student || {};
+      var perf = d.performance || {};
+      var att = d.attendance || {};
+      var fees = d.fees || { cycles: [], summary: {} };
+
+      var html =
+        '<h3 class="gpn-modal-title">' + esc(s.Name || id) + '</h3>' +
+        '<p class="gpn-modal-sub">' + esc(s.StudentID) + ' · ' + esc(s.Class || '') + ' · ' + pill(s.Status || '') + '</p>' +
+
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Profile</h3></div><div class="gpn-card-body">' +
+          infoRow('Phone', s.Phone) +
+          infoRow('Email', s.Email) +
+          infoRow('School', s.School) +
+          infoRow('Parent', s.ParentName) +
+          infoRow('DOJ', fmtDate(s.DOJ)) +
+          infoRow('Fee', fmtCur(s.FeeAmount || 0)) +
+        '</div></div>' +
+
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Performance</h3></div><div class="gpn-card-body">' +
+          infoRow('Overall Avg', GPN.formatPercent(perf.overallAvg || 0)) +
+          infoRow('Weekly Avg', perf.weeklyAvg !== null && perf.weeklyAvg !== undefined ? GPN.formatPercent(perf.weeklyAvg) : '—') +
+          infoRow('Monthly Avg', perf.monthlyAvg !== null && perf.monthlyAvg !== undefined ? GPN.formatPercent(perf.monthlyAvg) : '—') +
+          infoRow('Trend', perf.trend || '—') +
+          infoRow('Badges', (d.badges || []).join(', ') || '—') +
+        '</div></div>' +
+
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Fees Summary</h3></div><div class="gpn-card-body">' +
+          infoRow('Status', (fees.summary && fees.summary.status) || '—') +
+          infoRow('Total Due', fmtCur((fees.summary && fees.summary.due) || 0)) +
+          infoRow('Cycles', (fees.cycles || []).length) +
+        '</div></div>' +
+
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Attendance by Month</h3></div><div class="gpn-card-body">' +
+          (Object.keys(att).length ? Object.keys(att).sort().slice(-6).map(function (k) {
+            return infoRow(k, att[k].percent + '% (' + att[k].present + '/' + att[k].total + ')');
+          }).join('') : '<div class="gpn-quiet">No attendance yet.</div>') +
+        '</div></div>' +
+
+        '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="ofsProgress">Progress Report</button><button class="gpn-btn gpn-btn-ghost" id="ofsClose">Close</button></div>';
+
+      openModal(html, function () {
+        GPN.on(GPN.byId('ofsClose'), 'click', closeModal);
+        GPN.on(GPN.byId('ofsProgress'), 'click', function () { closeModal(); offlineProgressReportModal(id); });
+      });
+    });
+  }
+  function infoRow(label, value) {
+    return '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span class="gpn-quiet">' + esc(label) + '</span><span class="gpn-strong" style="color:var(--cyan-bright);">' + esc(value || '—') + '</span></div>';
+  }
+
+  function offlineProgressReportModal(id) {
+    GPN.api('adminOfflineProgressReport', { studentId: id }).then(function (j) {
+      if (!j.ok) { GPN.Toast.error(GPN.friendlyError(j)); return; }
+      var r = j.data.report || {};
+      var badges = j.data.badges || [];
+      var remark = j.data.remark || '';
+
+      var html =
+        '<h3 class="gpn-modal-title">Progress Report</h3>' +
+        '<p class="gpn-modal-sub">' + esc(id) + '</p>' +
+
+        '<div class="gpn-card"><div class="gpn-card-body" style="padding:14px;border-left:3px solid var(--cyan);">' +
+          '<div class="gpn-strong" style="color:var(--cyan-bright);">' + esc(r.overallLabel || '—') + '</div>' +
+          '<div class="gpn-quiet" style="margin-top:4px;">' + esc(r.overallLabelHindi || '') + '</div>' +
+        '</div></div>' +
+
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Test Performance</h3></div><div class="gpn-card-body">' +
+          '<div class="gpn-strong">' + esc(r.testTrend && r.testTrend.label || '—') + '</div>' +
+          '<div class="gpn-quiet">' + esc(r.testTrend && r.testTrend.labelHindi || '') + '</div>' +
+        '</div></div>' +
+
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Attendance</h3></div><div class="gpn-card-body">' +
+          '<div class="gpn-strong">' + esc(r.attTrend && r.attTrend.label || '—') + '</div>' +
+          '<div class="gpn-quiet">' + esc(r.attTrend && r.attTrend.labelHindi || '') + '</div>' +
+        '</div></div>' +
+
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Study Files</h3></div><div class="gpn-card-body">' +
+          '<div class="gpn-strong">' + esc(r.filesTrend && r.filesTrend.label || '—') + '</div>' +
+          '<div class="gpn-quiet">' + esc(r.filesTrend && r.filesTrend.labelHindi || '') + '</div>' +
+        '</div></div>' +
+
+        (badges.length ? '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Badges</h3></div><div class="gpn-card-body">' + badges.map(function (b) { return pill(b, 'gold'); }).join(' ') + '</div></div>' : '') +
+
+        (remark ? '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Teacher Remark</h3></div><div class="gpn-card-body">' + esc(remark) + '</div></div>' : '') +
+
+        '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="prClose">Close</button></div>';
+
+      openModal(html, function () { GPN.on(GPN.byId('prClose'), 'click', closeModal); });
+    });
+  }
+
+  function resetOfflinePasswordModal(id) {
+    var html =
+      '<h3 class="gpn-modal-title">Reset Password</h3>' +
+      '<div class="gpn-field"><label class="gpn-label">New Password (min 10)</label><input id="rpNew" class="gpn-input" type="password"></div>' +
+      '<div id="rpErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="rpCancel">Cancel</button><button class="gpn-btn gpn-btn-danger" id="rpSave">Reset</button></div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('rpCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('rpSave'), 'click', function () {
+        var pw = GPN.byId('rpNew').value;
+        var err = GPN.byId('rpErr');
+        if (pw.length < 10) { err.textContent = 'Min 10 characters.'; err.hidden = false; return; }
+        GPN.api('adminOfflineResetPassword', { id: id, password: pw }).then(function (r) {
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Password reset.'); closeModal();
+        });
+      });
+    });
+  }
+
+  function deleteOfflineStudent(id) {
+    if (!confirm('Delete ' + id + '? (Soft delete)')) return;
+    GPN.api('adminOfflineDeleteStudent', { id: id }).then(function (r) {
+      if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+      GPN.Toast.ok('Deleted.'); render('students');
+    });
+  }
+
+  VIEWS.batches = function () {
+    return Promise.all([GPN.api('adminOfflineListBatches'), GPN.api('adminOfflineBatchMap')]).then(function (res) {
+      var batches = (res[0].ok && res[0].data && res[0].data.batches) || [];
+      var assignments = (res[1].ok && res[1].data && res[1].data.assignments) || [];
+      var byBatch = {};
+      assignments.forEach(function (a) {
+        if (!byBatch[a.batchId]) byBatch[a.batchId] = [];
+        byBatch[a.batchId].push(a);
+      });
+
+      var html = '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Batches (' + batches.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddBatch">+ Add</button>' +
+        '</div>';
+      if (!batches.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No batches yet.</div></div>';
+      } else {
+        batches.forEach(function (b) {
+          var students = byBatch[b.BatchID] || [];
+          html += '<div class="gpn-card-body" style="border-bottom:1px solid var(--border-hair);">' +
+            '<div class="gpn-row-between"><div>' +
+              '<div class="gpn-strong" style="color:var(--cyan-bright);font-family:var(--font-serif);">' + esc(b.BatchName) + '</div>' +
+              '<div class="gpn-quiet">' + esc(b.StartTime || '') + (b.EndTime ? ' – ' + b.EndTime : '') + (b.Days ? ' · ' + b.Days : '') + '</div>' +
+            '</div><div>' +
+              pill(students.length + ' students', 'info') + ' ' +
+              '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" data-assign="' + esc(b.BatchID) + '">Manage</button>' +
+            '</div></div>' +
+          '</div>';
+        });
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddBatch'), 'click', addBatchModal);
+      GPN.$$('button[data-assign]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () { manageBatch(btn.dataset.assign, batches); });
+      });
+    });
+  };
+
+  function addBatchModal() {
+    var html =
+      '<h3 class="gpn-modal-title">Add Batch</h3>' +
+      '<div class="gpn-field"><label class="gpn-label">Batch Name</label><input id="abName" class="gpn-input" placeholder="GPN - Batch 11"></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Start Time</label><input id="abStart" class="gpn-input" placeholder="3:00 PM"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">End Time</label><input id="abEnd" class="gpn-input" placeholder="4:00 PM"></div>' +
+      '</div>' +
+      '<div class="gpn-field"><label class="gpn-label">Days</label><input id="abDays" class="gpn-input" placeholder="Mon, Tue, Wed"></div>' +
+      '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="abCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="abSave">Create</button></div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('abCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('abSave'), 'click', function () {
+        var payload = {
+          BatchName: GPN.byId('abName').value.trim(),
+          StartTime: GPN.byId('abStart').value.trim(),
+          EndTime: GPN.byId('abEnd').value.trim(),
+          Days: GPN.byId('abDays').value.trim()
+        };
+        if (!payload.BatchName) { GPN.Toast.error('Name required.'); return; }
+        GPN.api('adminOfflineCreateBatch', payload).then(function (r) {
+          if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+          GPN.Toast.ok('Batch created.'); closeModal(); render('batches');
+        });
+      });
+    });
+  }
+
+  function manageBatch(batchId, batches) {
+    Promise.all([GPN.api('adminOfflineListStudents'), GPN.api('adminOfflineBatchMap')]).then(function (res) {
+      var students = (res[0].ok && res[0].data && res[0].data.students) || [];
+      var assignments = (res[1].ok && res[1].data && res[1].data.assignments) || [];
+      var inBatch = {};
+      assignments.forEach(function (a) {
+        if (String(a.batchId) === String(batchId)) inBatch[a.studentId] = true;
+      });
+
+      var html =
+        '<h3 class="gpn-modal-title">Manage ' + esc(batchId) + '</h3>' +
+        '<p class="gpn-modal-sub">' + (Object.keys(inBatch).length) + ' students in this batch</p>' +
+        '<input class="gpn-search" id="bmSearch" placeholder="Search students…" style="margin-bottom:10px;">' +
+        '<div id="bmList" style="max-height:50dvh;overflow-y:auto;">';
+
+      students.forEach(function (s) {
+        var inside = !!inBatch[s.StudentID];
+        html += '<div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);" data-search="' + esc([s.Name, s.StudentID].join(' ').toLowerCase()) + '">' +
+          '<div><div class="gpn-strong">' + esc(s.Name) + '</div><div class="gpn-quiet">' + esc(s.StudentID) + ' · ' + esc(s.Class || '') + '</div></div>' +
+          (inside
+            ? '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-unassign="' + esc(s.StudentID) + '">Remove</button>'
+            : '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" data-assign-one="' + esc(s.StudentID) + '">Add</button>') +
+        '</div>';
+      });
+      html += '</div>' +
+        '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="bmClose">Close</button></div>';
+
+      openModal(html, function () {
+        GPN.on(GPN.byId('bmClose'), 'click', closeModal);
+        GPN.on(GPN.byId('bmSearch'), 'input', GPN.debounce(function (e) {
+          var q = e.target.value.toLowerCase().trim();
+          GPN.$$('#bmList > div').forEach(function (row) {
+            row.style.display = (!q || (row.dataset.search || '').indexOf(q) >= 0) ? '' : 'none';
+          });
+        }, 120));
+
+        GPN.$$('#bmList button[data-assign-one]').forEach(function (b) {
+          GPN.on(b, 'click', function () {
+            GPN.api('adminOfflineAssignBatch', { studentId: b.dataset.assignOne, batchId: batchId }).then(function (r) {
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              manageBatch(batchId, batches);
+            });
+          });
+        });
+        GPN.$$('#bmList button[data-unassign]').forEach(function (b) {
+          GPN.on(b, 'click', function () {
+            GPN.api('adminOfflineUnassignBatch', { studentId: b.dataset.unassign, batchId: batchId }).then(function (r) {
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              manageBatch(batchId, batches);
+            });
+          });
+        });
+      });
+    });
+  }
+
+  VIEWS.attendance = function () {
+    var today = GPN.todayISO();
+    var html =
+      '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Mark Attendance</h3>' +
+      '</div><div class="gpn-card-body">' +
+        '<div class="gpn-grid-2">' +
+          '<div class="gpn-field"><label class="gpn-label">Date</label><input id="attDate" class="gpn-input" type="date" value="' + today + '"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Batch Filter</label><select id="attBatch" class="gpn-select"><option value="">All Active Students</option></select></div>' +
+        '</div>' +
+        '<div class="gpn-row" style="margin-top:10px;">' +
+          '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="attLoad">Load Students</button>' +
+          '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="attHoliday">Mark as Holiday</button>' +
+          '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="attSubmit">Submit Attendance</button>' +
+        '</div>' +
+      '</div></div>' +
+
+      '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title" id="attTitle">Students</h3></div>' +
+      '<div class="gpn-card-body" id="attList"><div class="gpn-quiet">Tap Load Students to begin.</div></div></div>' +
+      '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Recent Days</h3></div>' +
+      '<div class="gpn-card-body" id="attRecent"><div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div></div></div>';
+
+    viewRoot.innerHTML = html;
+
+    GPN.api('adminOfflineListBatches').then(function (j) {
+      var bs = (j.ok && j.data && j.data.batches) || [];
+      var sel = GPN.byId('attBatch');
+      bs.forEach(function (b) {
+        var opt = document.createElement('option');
+        opt.value = b.BatchID; opt.textContent = b.BatchName;
+        sel.appendChild(opt);
+      });
+    });
+
+    var absentSet = new Set();
+
+    GPN.on(GPN.byId('attLoad'), 'click', loadAttendanceStudents);
+    GPN.on(GPN.byId('attHoliday'), 'click', function () { markHoliday(); });
+    GPN.on(GPN.byId('attSubmit'), 'click', submitAttendance);
+
+    loadRecentDays();
+
+    function loadAttendanceStudents() {
+      var batchId = GPN.byId('attBatch').value;
+      absentSet = new Set();
+      GPN.showContainerLoading(GPN.byId('attList'), 'Loading students…');
+
+      var promises = [GPN.api('adminOfflineListStudents')];
+      if (batchId) promises.push(GPN.api('adminOfflineBatchMap'));
+
+      Promise.all(promises).then(function (res) {
+        var students = (res[0].ok && res[0].data && res[0].data.students) || [];
+        students = students.filter(function (s) { return String(s.Status).toUpperCase() === 'ACTIVE'; });
+
+        if (batchId) {
+          var assignments = (res[1].ok && res[1].data && res[1].data.assignments) || [];
+          var inBatch = {};
+          assignments.forEach(function (a) { if (String(a.batchId) === batchId) inBatch[a.studentId] = true; });
+          students = students.filter(function (s) { return inBatch[s.StudentID]; });
+        }
+
+        if (!students.length) {
+          GPN.showContainerEmpty(GPN.byId('attList'), 'No active students in this batch.');
+          return;
+        }
+
+        GPN.byId('attTitle').textContent = 'Students (' + students.length + ')';
+        renderAttendance(students);
+      });
+    }
+
+    function renderAttendance(students) {
+      var wrap = GPN.byId('attList');
+      wrap.innerHTML = students.map(function (s) {
+        var isAbs = absentSet.has(s.StudentID);
+        return '<div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">' +
+          '<div><div class="gpn-strong">' + esc(s.Name) + '</div><div class="gpn-quiet">' + esc(s.StudentID) + ' · ' + esc(s.Class || '') + '</div></div>' +
+          '<button class="gpn-btn ' + (isAbs ? 'gpn-btn-danger' : 'gpn-btn-cyan') + ' gpn-btn-sm" data-toggle="' + esc(s.StudentID) + '">' + (isAbs ? '✗ Absent' : '✓ Present') + '</button>' +
+        '</div>';
+      }).join('');
+
+      GPN.$$('#attList button[data-toggle]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          var sid = b.dataset.toggle;
+          if (absentSet.has(sid)) absentSet.delete(sid); else absentSet.add(sid);
+          renderAttendance(students);
+        });
+      });
+    }
+
+    function markHoliday() {
+      var date = GPN.byId('attDate').value;
+      if (!date) { GPN.Toast.error('Pick a date.'); return; }
+      if (!confirm('Mark ' + date + ' as holiday for all students?')) return;
+      GPN.api('adminOfflineMarkAttendance', { date: date, holiday: true }).then(function (r) {
+        if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+        GPN.Toast.ok('Marked as holiday.'); loadRecentDays();
+      });
+    }
+
+    function submitAttendance() {
+      var date = GPN.byId('attDate').value;
+      var batchId = GPN.byId('attBatch').value;
+      if (!date) { GPN.Toast.error('Pick a date.'); return; }
+      var btn = GPN.byId('attSubmit');
+      GPN.setLoading(btn, true, 'Saving…');
+      GPN.api('adminOfflineMarkAttendance', {
+        date: date,
+        batchId: batchId || '',
+        holiday: false,
+        absents: Array.from(absentSet)
+      }).then(function (r) {
+        GPN.setLoading(btn, false);
+        if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+        GPN.Toast.ok('Attendance saved. Marked ' + (r.data.studentsMarked || 0));
+        loadRecentDays();
+      });
+    }
+
+    function loadRecentDays() {
+      GPN.api('adminOfflineAttendanceDays', { limit: 20 }).then(function (j) {
+        var days = (j.ok && j.data && j.data.days) || [];
+        if (!days.length) {
+          GPN.showContainerEmpty(GPN.byId('attRecent'), 'No attendance recorded yet.');
+          return;
+        }
+        GPN.byId('attRecent').innerHTML = '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Date</th><th>Day</th><th>Holiday</th></tr></thead><tbody>' +
+          days.map(function (d) {
+            return '<tr>' +
+              '<td data-label="Date">' + esc(fmtDate(d.Date)) + '</td>' +
+              '<td data-label="Day">' + esc(d.Day || '') + '</td>' +
+              '<td data-label="Holiday">' + (String(d.IsHoliday).toUpperCase() === 'Y' ? pill('Yes', 'warn') : '—') + '</td>' +
+            '</tr>';
+          }).join('') + '</tbody></table></div>';
+      });
+    }
+  };
+
+  VIEWS.tests = function () {
+    return Promise.all([GPN.api('adminOfflineListTests'), GPN.api('adminOfflineListStudents')]).then(function (res) {
+      var tests = (res[0].ok && res[0].data && res[0].data.tests) || [];
+      var students = (res[1].ok && res[1].data && res[1].data.students) || [];
+      var stuMap = {}; students.forEach(function (s) { stuMap[s.StudentID] = s.Name; });
+
+      var html = '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Test Scores (' + tests.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddScore">+ Add Score</button>' +
+        '</div>';
+      if (!tests.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No test scores yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Student</th><th>Month</th><th>Week</th><th>Type</th><th>Score</th><th>%</th><th></th></tr></thead><tbody>';
+        tests.slice(0, 200).forEach(function (t) {
+          var pct = t.Max > 0 ? Math.round((t.Score / t.Max) * 1000) / 10 : 0;
+          html += '<tr>' +
+            '<td data-label="Student">' + esc(stuMap[t.StudentID] || t.StudentID) + '</td>' +
+            '<td data-label="Month">' + esc(t.MonthLabel) + '</td>' +
+            '<td data-label="Week">' + esc(t.WeekLabel) + '</td>' +
+            '<td data-label="Type">' + esc(t.TestType || '') + '</td>' +
+            '<td data-label="Score">' + esc(t.Score) + ' / ' + esc(t.Max) + '</td>' +
+            '<td data-label="%">' + esc(pct) + '</td>' +
+            '<td data-label="Actions"><button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-del="' + esc(t.TestID) + '">Delete</button></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddScore'), 'click', function () { addTestScoreModal(students); });
+
+      GPN.$$('button[data-del]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          if (!confirm('Delete score?')) return;
+          GPN.api('adminOfflineDeleteTest', { testId: b.dataset.del }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Deleted.'); render('tests');
+          });
+        });
+      });
+    });
+  };
+
+  function addTestScoreModal(students) {
+    var stuOpts = '<option value="">— Select —</option>' + students.map(function (s) {
+      return '<option value="' + esc(s.StudentID) + '">' + esc(s.Name) + ' (' + esc(s.StudentID) + ')</option>';
+    }).join('');
+    var html =
+      '<h3 class="gpn-modal-title">Add / Update Test Score</h3>' +
+      '<div class="gpn-field"><label class="gpn-label">Student</label><select id="tsStu" class="gpn-select">' + stuOpts + '</select></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Month (e.g. Apr 2026)</label><input id="tsMonth" class="gpn-input" placeholder="Apr 2026"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Week</label><select id="tsWeek" class="gpn-select"><option>M1</option><option>M2</option><option>M3</option><option>M4</option><option>Major</option></select></div>' +
+      '</div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Score</label><input id="tsScore" class="gpn-input" type="number"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Max</label><input id="tsMax" class="gpn-input" type="number" value="20"></div>' +
+      '</div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Subject (optional)</label><input id="tsSubject" class="gpn-input"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Test Date</label><input id="tsDate" class="gpn-input" type="date" value="' + GPN.todayISO() + '"></div>' +
+      '</div>' +
+      '<div id="tsError" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="tsCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="tsSave">Save</button></div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('tsCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('tsSave'), 'click', function () {
+        var err = GPN.byId('tsError'); err.hidden = true;
+        var payload = {
+          StudentID: GPN.byId('tsStu').value,
+          MonthLabel: GPN.byId('tsMonth').value.trim(),
+          WeekLabel: GPN.byId('tsWeek').value,
+          Score: GPN.byId('tsScore').value,
+          Max: GPN.byId('tsMax').value,
+          Subject: GPN.byId('tsSubject').value.trim(),
+          TestDate: GPN.byId('tsDate').value
+        };
+        if (!payload.StudentID || !payload.MonthLabel) {
+          err.textContent = 'Student and Month required.'; err.hidden = false; return;
+        }
+        GPN.api('adminOfflineSaveTest', payload).then(function (r) {
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Score saved.'); closeModal(); render('tests');
+        });
+      });
+    });
+  }
+
+  VIEWS.fees = function () {
+    return GPN.api('adminOfflineFeesSummary').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var d = j.data || {};
+      var byMonth = d.byMonth || {};
+      var labels = Object.keys(byMonth).sort();
+
+      var html = '<div class="gpn-stats">' +
+        statCard('Total Expected', fmtCur(d.totalExpected || 0)) +
+        statCard('Total Collected', fmtCur(d.totalCollected || 0), 'green') +
+        statCard('Total Due', fmtCur(d.totalDue || 0), 'error') +
+      '</div>';
+
+      html += '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Monthly Breakdown</h3>' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnRebuildFees">Rebuild Summary</button>' +
+        '</div>';
+      if (!labels.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No fee cycles yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Month</th><th>Expected</th><th>Collected</th><th>Due</th><th>Paid</th><th>Late</th><th>Due</th></tr></thead><tbody>';
+        labels.forEach(function (label) {
+          var m = byMonth[label];
+          html += '<tr>' +
+            '<td data-label="Month">' + esc(label) + '</td>' +
+            '<td data-label="Expected">' + fmtCur(m.expected || 0) + '</td>' +
+            '<td data-label="Collected" style="color:var(--success);">' + fmtCur(m.collected || 0) + '</td>' +
+            '<td data-label="Due" style="color:var(--error);">' + fmtCur(m.due || 0) + '</td>' +
+            '<td data-label="Paid">' + (m.paidCount || 0) + '</td>' +
+            '<td data-label="Late">' + (m.lateCount || 0) + '</td>' +
+            '<td data-label="Due">' + (m.dueCount || 0) + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnRebuildFees'), 'click', function () {
+        var btn = GPN.byId('btnRebuildFees');
+        GPN.setLoading(btn, true, 'Rebuilding…');
+        GPN.api('adminOfflineRebuildFeesSummary').then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+          GPN.Toast.ok('Summary rebuilt.'); render('fees');
+        });
+      });
+    });
+  };
+
+  function offlineFeesModal(studentId) {
+    GPN.api('adminOfflineStudentFees', { studentId: studentId }).then(function (j) {
+      if (!j.ok) { GPN.Toast.error(GPN.friendlyError(j)); return; }
+      var cycles = (j.data && j.data.cycles) || [];
+      var summary = (j.data && j.data.summary) || {};
+
+      var html =
+        '<h3 class="gpn-modal-title">Fees — ' + esc(studentId) + '</h3>' +
+        '<p class="gpn-modal-sub">Status: ' + pill(summary.status || '—') + ' · Due: ' + fmtCur(summary.due || 0) + '</p>';
+
+      html += '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Cycles (' + cycles.length + ')</h3></div>';
+      if (!cycles.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No cycles. Extend to generate.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Cycle</th><th>Start</th><th>End</th><th>Deadline</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>';
+        cycles.forEach(function (c) {
+          html += '<tr>' +
+            '<td data-label="Cycle">' + esc(c.cycleLabel) + '</td>' +
+            '<td data-label="Start">' + esc(fmtDate(c.cycleStart)) + '</td>' +
+            '<td data-label="End">' + esc(fmtDate(c.cycleEnd)) + '</td>' +
+            '<td data-label="Deadline">' + esc(fmtDate(c.deadline)) + '</td>' +
+            '<td data-label="Amount">' + fmtCur(c.feeAmount || 0) + '</td>' +
+            '<td data-label="Status">' + pill(c.status || '') + '</td>' +
+            '<td data-label="Actions">' + (String(c.status).toUpperCase() !== 'PAID' ? '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" data-paid="' + esc(c.cycleLabel) + '">Mark Paid</button>' : '') + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+
+      html += '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="ofeExtend">Extend Cycles</button>' +
+        '<button class="gpn-btn gpn-btn-ghost" id="ofeClose">Close</button>' +
+      '</div>';
+
+      openModal(html, function () {
+        GPN.on(GPN.byId('ofeClose'), 'click', closeModal);
+        GPN.on(GPN.byId('ofeExtend'), 'click', function () {
+          var btn = GPN.byId('ofeExtend');
+          GPN.setLoading(btn, true, 'Extending…');
+          GPN.api('adminOfflineExtendCycles', { studentId: studentId }).then(function (r) {
+            GPN.setLoading(btn, false);
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Added ' + (r.data.created || 0) + ' cycle(s).'); offlineFeesModal(studentId);
+          });
+        });
+        GPN.$$('button[data-paid]').forEach(function (b) {
+          GPN.on(b, 'click', function () {
+            var label = b.dataset.paid;
+            if (!confirm('Mark ' + label + ' as paid?')) return;
+            GPN.api('adminOfflineMarkFeePaid', { studentId: studentId, cycleLabel: label }).then(function (r) {
+              if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+              GPN.Toast.ok('Marked ' + ((r.data && r.data.newStatus) || 'paid')); offlineFeesModal(studentId);
+            });
+          });
+        });
+      });
+    });
+  }
+
+  VIEWS.files = function () {
+    return GPN.api('adminOfflineListFiles').then(function (j) {
+      var rows = (j.ok && j.data && j.data.files) || [];
+      var html = '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Files (' + rows.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddFile">+ Register File</button>' +
+        '</div>';
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No files yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>Name</th><th>Class</th><th>Uploaded</th><th></th></tr></thead><tbody>';
+        rows.forEach(function (f) {
+          html += '<tr>' +
+            '<td data-label="Name">' + esc(f.FileName) + '</td>' +
+            '<td data-label="Class">' + esc(f.Class) + '</td>' +
+            '<td data-label="Uploaded">' + esc(fmtDate(f.UploadDate)) + '</td>' +
+            '<td data-label="Actions">' +
+              '<a class="gpn-btn gpn-btn-ghost gpn-btn-sm" href="' + esc(f.DriveURL) + '" target="_blank" rel="noopener">Open</a> ' +
+              '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-del="' + esc(f.FileID) + '">Deactivate</button>' +
+            '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddFile'), 'click', function () {
+        var html =
+          '<h3 class="gpn-modal-title">Register File</h3>' +
+          '<div class="gpn-field"><label class="gpn-label">File Name</label><input id="rfName" class="gpn-input"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Class</label>' + classSelect('rfClass') + '</div>' +
+          '<div class="gpn-field"><label class="gpn-label">Drive URL</label><input id="rfUrl" class="gpn-input" placeholder="https://drive.google.com/..."></div>' +
+          '<div id="rfErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+          '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="rfCancel">Cancel</button><button class="gpn-btn gpn-btn-cyan" id="rfSave">Save</button></div>';
+        openModal(html, function () {
+          GPN.on(GPN.byId('rfCancel'), 'click', closeModal);
+          GPN.on(GPN.byId('rfSave'), 'click', function () {
+            var err = GPN.byId('rfErr'); err.hidden = true;
+            var payload = {
+              FileName: GPN.byId('rfName').value.trim(),
+              Class: GPN.byId('rfClass').value,
+              DriveURL: GPN.byId('rfUrl').value.trim()
+            };
+            if (!payload.FileName || !payload.Class || !payload.DriveURL) {
+              err.textContent = 'All fields required.'; err.hidden = false; return;
+            }
+            GPN.api('adminOfflineRegisterFile', payload).then(function (r) {
+              if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+              GPN.Toast.ok('Registered.'); closeModal(); render('files');
+            });
+          });
+        });
+      });
+      GPN.$$('button[data-del]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          if (!confirm('Deactivate this file?')) return;
+          GPN.api('adminOfflineDeactivateFile', { fileId: b.dataset.del }).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Deactivated.'); render('files');
+          });
+        });
+      });
+    });
+  };
+
+  VIEWS.leaderboard = function () {
+    return GPN.api('adminOfflineLeaderboard').then(function (j) {
+      var rows = (j.ok && j.data && j.data.leaderboard) || [];
+      var html = '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Leaderboard (' + rows.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnRefreshLb">Refresh</button>' +
+        '</div>';
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No ranking data yet.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>#</th><th>Name</th><th>Class</th><th>Avg %</th><th>Att %</th><th>Badges</th></tr></thead><tbody>';
+        rows.forEach(function (r) {
+          var color = r.rank === 1 ? 'var(--gold)' : r.rank === 2 ? 'var(--cyan-bright)' : r.rank === 3 ? '#e8a050' : 'var(--tx-muted)';
+          html += '<tr>' +
+            '<td data-label="#" style="color:' + color + ';font-weight:700;font-family:var(--font-serif);">#' + esc(r.rank) + '</td>' +
+            '<td data-label="Name">' + esc(r.name) + '</td>' +
+            '<td data-label="Class">' + esc(r.cls || '') + '</td>' +
+            '<td data-label="Avg %">' + GPN.formatPercent(r.overallAvg) + '</td>' +
+            '<td data-label="Att %">' + GPN.formatPercent(r.attendancePct) + '</td>' +
+            '<td data-label="Badges">' + (r.badges ? r.badges.split(',').map(function (b) { return pill(b.trim(), 'gold'); }).join(' ') : '—') + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnRefreshLb'), 'click', function () {
+        var btn = GPN.byId('btnRefreshLb');
+        GPN.setLoading(btn, true, 'Refreshing…');
+        GPN.api('adminOfflineLeaderboard').then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+          GPN.Toast.ok('Refreshed.'); render('leaderboard');
+        });
+      });
+    });
+  };
+
+})();
+</script>
+</body>
+</html>

@@ -1,1 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>My Dashboard — Guided Path Noida</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body>
 
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading your dashboard…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <!-- ============================================================
+       TOPBAR
+       ============================================================ -->
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">Master <b>Dashboard</b></div>
+    </div>
+    <div class="gpn-topbar-user">
+      <span class="gpn-user-badge" id="userBadge">—</span>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnChangePw" type="button">Password</button>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnLogout" type="button">Logout</button>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       TAB STRIP — Overview / Online / Offline
+       ============================================================ -->
+  <nav class="gpn-navstrip" id="tabStrip">
+    <button class="gpn-navstrip-btn active" data-tab="overview" type="button">Overview</button>
+    <button class="gpn-navstrip-btn" data-tab="online" type="button">Online</button>
+    <button class="gpn-navstrip-btn" data-tab="offline" type="button">Offline</button>
+  </nav>
+
+  <!-- ============================================================
+       MAIN
+       ============================================================ -->
+  <main class="gpn-main" id="viewRoot">
+    <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+  </main>
+
+</div>
+
+<!-- ============================================================
+     CHANGE PASSWORD MODAL
+     ============================================================ -->
+<div class="gpn-modal" id="pwModal" hidden>
+  <div class="gpn-modal-card">
+    <h3 class="gpn-modal-title">Change Password</h3>
+    <p class="gpn-modal-sub" id="pwSubtitle">Choose a strong password of at least 10 characters.</p>
+
+    <form id="pwForm" novalidate>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwCurrent">Current Password</label>
+        <input id="pwCurrent" type="password" class="gpn-input" autocomplete="current-password" required>
+      </div>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwNew">New Password</label>
+        <input id="pwNew" type="password" class="gpn-input" autocomplete="new-password" minlength="10" required>
+      </div>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwConfirm">Confirm New Password</label>
+        <input id="pwConfirm" type="password" class="gpn-input" autocomplete="new-password" minlength="10" required>
+      </div>
+
+      <div id="pwAlert" class="gpn-alert gpn-alert-error" hidden></div>
+
+      <div class="gpn-modal-actions">
+        <button type="button" class="gpn-btn gpn-btn-ghost" id="pwCancel">Cancel</button>
+        <button type="submit" class="gpn-btn gpn-btn-cyan" id="pwSubmit">Update Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ==========================================================
+     GUARD
+     ========================================================== */
+  if (!GPN.Guard.requireStudent()) return;
+
+  /* ==========================================================
+     STATE
+     ========================================================== */
+  var forcedChange = false;
+  var pwModalEl    = null;
+  var currentTab   = 'overview';
+
+  var DATA = {
+    announcement: null,
+    counters:     null,
+    socials:      null,
+    dashboard:    null,
+    online:       null,
+    offline:      null
+  };
+
+  /* Track which sub-tabs have been loaded to avoid repeat fetches */
+  var loaded = {
+    online:  false,
+    offline: false
+  };
+
+  /* ==========================================================
+     BOOT
+     ========================================================== */
+  GPN.ready(function () {
+    pwModalEl = GPN.byId('pwModal');
+
+    /* Module guard — this page is only for mp- students */
+    var mod = GPN.Session.getModule();
+    if (mod !== 'mp') {
+      /* Wrong module — redirect to the right landing page */
+      var dest = GPN.Session.landingPage();
+      if (dest && dest !== 'student-master.html') {
+        window.location.replace(dest);
+        return;
+      }
+    }
+
+    GPN.byId('userBadge').textContent = GPN.Session.getName() || 'Student';
+    GPN.byId('userBadge').title = GPN.Session.getUser() || '';
+
+    GPN.byId('appRoot').hidden = false;
+    GPN.byId('pageLoading').hidden = true;
+
+    /* Tab switching */
+    GPN.$$('#tabStrip .gpn-navstrip-btn').forEach(function (btn) {
+      GPN.on(btn, 'click', function () {
+        GPN.$$('#tabStrip .gpn-navstrip-btn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentTab = btn.dataset.tab;
+        renderTab(currentTab);
+      });
+    });
+
+    /* Logout */
+    GPN.on(GPN.byId('btnLogout'), 'click', function () {
+      if (!confirm('Sign out of GPN Central?')) return;
+      GPN.Guard.logout();
+    });
+
+    /* Modal wiring — respects forcedChange */
+    GPN.on(pwModalEl, 'click', function (e) {
+      if (forcedChange) return;
+      if (e.target === pwModalEl) GPN.Modal.close('pwModal');
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || pwModalEl.hidden) return;
+      if (forcedChange) { e.preventDefault(); return; }
+      GPN.Modal.close('pwModal');
+    });
+
+    GPN.on(GPN.byId('pwCancel'), 'click', function () {
+      if (forcedChange) return;
+      GPN.Modal.close('pwModal');
+    });
+
+    GPN.on(GPN.byId('btnChangePw'), 'click', function () {
+      forcedChange = false;
+      openPwModal();
+    });
+
+    GPN.on(GPN.byId('pwForm'), 'submit', function (e) {
+      e.preventDefault();
+      handleChangePassword();
+    });
+
+    /* Forced-change detection */
+    var q = GPN.query();
+    if (String((q && q.mustChange) || '') === '1') {
+      enterForcedMode();
+    }
+
+    GPN.api('auth.me').then(function (j) {
+      if (j && j.ok && j.data && j.data.mustChange === true) {
+        enterForcedMode();
+      }
+    });
+
+    /* Load Overview data */
+    loadOverview();
+  });
+
+
+  /* ==========================================================
+     FORCED-CHANGE FLOW
+     ========================================================== */
+  function enterForcedMode() {
+    if (forcedChange) return;
+    forcedChange = true;
+    GPN.byId('pwCancel').style.display = 'none';
+    GPN.byId('pwSubtitle').textContent =
+      'For security, please change your password to continue. Cancel is disabled until you set a new password.';
+    openPwModal();
+  }
+
+  function exitForcedMode() {
+    forcedChange = false;
+    GPN.byId('pwCancel').style.display = '';
+    GPN.byId('pwSubtitle').textContent =
+      'Choose a strong password of at least 10 characters.';
+  }
+
+  function openPwModal() {
+    GPN.byId('pwAlert').hidden = true;
+    GPN.byId('pwForm').reset();
+    GPN.Modal.open('pwModal');
+  }
+
+
+  /* ==========================================================
+     TAB ROUTER
+     ========================================================== */
+  function renderTab(tab) {
+    if (tab === 'overview') return renderOverview();
+    if (tab === 'online')   return renderOnlineTab();
+    if (tab === 'offline')  return renderOfflineTab();
+  }
+
+
+  /* ==========================================================
+     LOAD OVERVIEW DATA (parallel)
+     ========================================================== */
+  function loadOverview() {
+    Promise.all([
+      GPN.api('studentMasterDashboard'),
+      GPN.api('studentAnnouncement'),
+      GPN.api('studentCounters'),
+      GPN.api('studentSocials')
+    ]).then(function (res) {
+      DATA.dashboard    = (res[0] && res[0].ok) ? res[0].data : null;
+      DATA.announcement = (res[1] && res[1].ok) ? res[1].data : null;
+      DATA.counters     = (res[2] && res[2].ok) ? res[2].data : null;
+      DATA.socials      = (res[3] && res[3].ok) ? res[3].data : null;
+
+      if (currentTab === 'overview') renderOverview();
+    }).catch(function (err) {
+      console.error('Overview load failed:', err);
+      GPN.showContainerError(GPN.byId('viewRoot'), 'Failed to load your dashboard. Please refresh.');
+    });
+  }
+
+
+  /* ==========================================================
+     OVERVIEW TAB
+     ========================================================== */
+  function renderOverview() {
+    var d = DATA.dashboard;
+    if (!d) {
+      GPN.showContainerLoading(GPN.byId('viewRoot'), 'Loading your dashboard…');
+      return;
+    }
+
+    var s = d.student || {};
+    var combined = d.combined || {};
+    var html = '';
+
+    /* Announcement */
+    if (DATA.announcement && DATA.announcement.active && DATA.announcement.html) {
+      html += '<div class="gpn-announce" id="annBox">' +
+        '<button class="gpn-announce-close" type="button" id="annClose" aria-label="Dismiss">×</button>' +
+        (DATA.announcement.title ? '<div class="gpn-announce-title">' + GPN.esc(DATA.announcement.title) + '</div>' : '') +
+        '<div>' + DATA.announcement.html + '</div>' +
+      '</div>';
+    }
+
+    /* Welcome */
+    var sub = GPN.esc(s.StudentID || '');
+    if (s.Class)  sub += ' · ' + GPN.esc(s.Class);
+    if (s.School) sub += ' · ' + GPN.esc(s.School);
+
+    html += '<section class="gpn-welcome">' +
+      '<h1 class="gpn-welcome-title">Hi, ' + GPN.esc(s.Name || 'Student') + '</h1>' +
+      '<p class="gpn-welcome-sub">' + sub + '</p>' +
+    '</section>';
+
+    /* Link status pills */
+    html += '<div class="gpn-card">' +
+      '<div class="gpn-card-head"><h3 class="gpn-card-title">Your Programme Access</h3></div>' +
+      '<div class="gpn-card-body">' +
+        '<div style="display:grid;gap:12px;">' +
+          '<div class="gpn-row-between" style="padding:10px 0;border-bottom:1px solid var(--border-hair);">' +
+            '<div>' +
+              '<div class="gpn-strong" style="color:var(--cyan-bright);font-family:var(--font-serif);">Online Programme</div>' +
+              '<div class="gpn-quiet" style="font-size:0.78rem;margin-top:2px;">' +
+                (d.hasOnline ? 'Linked to ' + GPN.esc(d.onlineStudent ? d.onlineStudent.Name : '') + (s.OlID ? ' (' + GPN.esc(s.OlID) + ')' : '') : 'Not linked') +
+              '</div>' +
+            '</div>' +
+            '<div>' +
+              (d.hasOnline ? '<span class="gpn-pill active">Active</span>' : '<span class="gpn-pill draft">Not linked</span>') +
+            '</div>' +
+          '</div>' +
+          '<div class="gpn-row-between" style="padding:10px 0;">' +
+            '<div>' +
+              '<div class="gpn-strong" style="color:var(--cyan-bright);font-family:var(--font-serif);">Offline Programme</div>' +
+              '<div class="gpn-quiet" style="font-size:0.78rem;margin-top:2px;">' +
+                (d.hasOffline ? 'Linked to ' + GPN.esc(d.offlineStudent ? d.offlineStudent.Name : '') + (s.HqID ? ' (' + GPN.esc(s.HqID) + ')' : '') : 'Not linked') +
+              '</div>' +
+            '</div>' +
+            '<div>' +
+              (d.hasOffline ? '<span class="gpn-pill active">Active</span>' : '<span class="gpn-pill draft">Not linked</span>') +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+    /* Combined stats */
+    html += '<div class="gpn-stats">' +
+      '<div class="gpn-stat">' +
+        '<span class="gpn-stat-label">Total Tests</span>' +
+        '<span class="gpn-stat-value">' + (combined.onlineTests || 0) + ' + ' + (combined.offlineTests || 0) + '</span>' +
+      '</div>' +
+      '<div class="gpn-stat">' +
+        '<span class="gpn-stat-label">Combined Avg</span>' +
+        '<span class="gpn-stat-value gold">' + GPN.formatPercent(
+          (combined.onlineAvg && combined.offlineAvg)
+            ? Math.round(((combined.onlineAvg + combined.offlineAvg) / 2) * 10) / 10
+            : (combined.onlineAvg || combined.offlineAvg || 0)
+        ) + '</span>' +
+      '</div>' +
+      '<div class="gpn-stat">' +
+        '<span class="gpn-stat-label">Wallet Balance</span>' +
+        '<span class="gpn-stat-value cyan">' + GPN.formatCurrency(combined.walletBalance || 0) + '</span>' +
+      '</div>' +
+      '<div class="gpn-stat">' +
+        '<span class="gpn-stat-label">Fees Status</span>' +
+        '<span class="gpn-stat-value ' + GPN.esc(String(combined.feesStatus || 'none').toLowerCase().replace(/\s/g, '-')) + '">' +
+          GPN.esc(combined.feesStatus || '—') +
+        '</span>' +
+      '</div>' +
+    '</div>';
+
+    /* Quick links */
+    html += '<div class="gpn-card">' +
+      '<div class="gpn-card-head"><h3 class="gpn-card-title">Explore</h3></div>' +
+      '<div class="gpn-card-body">' +
+        '<div class="gpn-grid-2">' +
+          '<button class="gpn-quick-card" data-goto="online" type="button" ' + (d.hasOnline ? '' : 'disabled style="opacity:0.5;cursor:not-allowed;"') + '>' +
+            '<div class="gpn-quick-label">Online Programme</div>' +
+            '<div class="gpn-quick-value">' + (d.hasOnline ? 'View →' : 'Not linked') + '</div>' +
+            '<div class="gpn-quick-hint">Tests, materials, wallet</div>' +
+          '</button>' +
+          '<button class="gpn-quick-card" data-goto="offline" type="button" ' + (d.hasOffline ? '' : 'disabled style="opacity:0.5;cursor:not-allowed;"') + '>' +
+            '<div class="gpn-quick-label">Offline Programme</div>' +
+            '<div class="gpn-quick-value">' + (d.hasOffline ? 'View →' : 'Not linked') + '</div>' +
+            '<div class="gpn-quick-hint">Fees, attendance, tests</div>' +
+          '</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+    /* Counters */
+    if (DATA.counters && DATA.counters.counters && DATA.counters.counters.length) {
+      html += '<div class="gpn-counters">' +
+        DATA.counters.counters.map(function (c) {
+          return '<div class="gpn-counter">' +
+            (c.icon ? '<div class="gpn-counter-icon">' + GPN.esc(c.icon) + '</div>' : '') +
+            '<div class="gpn-counter-value">' + GPN.esc(c.value || '') + '</div>' +
+            '<div class="gpn-counter-label">' + GPN.esc(c.label || '') + '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    /* Socials */
+    if (DATA.socials && DATA.socials.links && DATA.socials.links.length) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Connect with Us</h2>' +
+        '<div class="gpn-social-grid">' +
+          DATA.socials.links.map(function (l) {
+            return '<a class="gpn-social-link" href="' + GPN.esc(l.url) + '" target="_blank" rel="noopener">' +
+              (l.icon ? '<span class="gpn-social-icon">' + GPN.esc(l.icon) + '</span>' : '') +
+              '<span class="gpn-social-name">' + GPN.esc(l.label) + '</span>' +
+            '</a>';
+          }).join('') +
+          (DATA.socials.gbp ? '<a class="gpn-social-link" href="' + GPN.esc(DATA.socials.gbp) + '" target="_blank" rel="noopener">' +
+            '<span class="gpn-social-icon">★</span><span class="gpn-social-name">Review us on Google</span></a>' : '') +
+        '</div>' +
+      '</section>';
+    }
+
+    /* Footer */
+    html += '<footer class="gpn-footer">' +
+      '<div>Guided Path Noida · Master Dashboard</div>' +
+      '<div style="margin-top:6px;">' +
+        '<a href="https://guidedpathnoida.in" target="_blank" rel="noopener">guidedpathnoida.in</a> · ' +
+        '<a href="https://wa.me/guidedpathnoida" target="_blank" rel="noopener">WhatsApp</a>' +
+      '</div>' +
+    '</footer>';
+
+    GPN.byId('viewRoot').innerHTML = html;
+
+    /* Wire announcement close */
+    var annClose = GPN.byId('annClose');
+    if (annClose) {
+      GPN.on(annClose, 'click', function () {
+        var box = GPN.byId('annBox');
+        if (box) box.style.display = 'none';
+      });
+    }
+
+    /* Wire quick nav buttons */
+    GPN.$$('button[data-goto]').forEach(function (b) {
+      if (b.disabled) return;
+      GPN.on(b, 'click', function () {
+        var target = b.dataset.goto;
+        var tabBtn = document.querySelector('#tabStrip button[data-tab="' + target + '"]');
+        if (tabBtn) tabBtn.click();
+      });
+    });
+  }
+
+
+  /* ==========================================================
+     ONLINE TAB — lazy-load read-only ol- data
+     ========================================================== */
+  function renderOnlineTab() {
+    if (!loaded.online) {
+      GPN.showContainerLoading(GPN.byId('viewRoot'), 'Loading Online data…');
+      GPN.api('studentMasterOnline').then(function (j) {
+        DATA.online = (j && j.ok) ? j.data : null;
+        loaded.online = true;
+        renderOnlineTab();
+      }).catch(function () {
+        GPN.showContainerError(GPN.byId('viewRoot'), 'Failed to load Online data.');
+      });
+      return;
+    }
+
+    var d = DATA.online;
+    if (!d) {
+      GPN.showContainerError(GPN.byId('viewRoot'), 'Online data unavailable.');
+      return;
+    }
+
+    if (!d.linked) {
+      var reason = d.reason || 'no_online_link';
+      var msg = 'You are not linked to an Online programme record.';
+      if (reason === 'online_record_missing')      msg = 'Your linked Online record could not be found.';
+      if (reason === 'online_record_inactive')     msg = 'Your linked Online record is inactive.';
+      return renderNotLinked('Online Programme', msg);
+    }
+
+    var s = d.student || {};
+    var html = '';
+
+    /* Read-only notice */
+    html += '<div class="gpn-alert gpn-alert-info" style="margin-bottom:14px;">' +
+      '<b>View-only.</b> This shows your Online programme data. To take tests or update anything, ' +
+      'please contact the admin or log in with your Online ID directly.' +
+    '</div>';
+
+    /* Student header */
+    var sub = GPN.esc(s.StudentID || '');
+    if (s.Class)  sub += ' · ' + GPN.esc(s.Class);
+    if (s.Board)  sub += ' · ' + GPN.esc(s.Board);
+
+    html += '<section class="gpn-welcome">' +
+      '<h1 class="gpn-welcome-title">Online: ' + GPN.esc(s.Name || '') + '</h1>' +
+      '<p class="gpn-welcome-sub">' + sub +
+        (d.access ? ' · <span class="gpn-pill ' + GPN.esc(String(d.access).toLowerCase()) + '">' + GPN.esc(d.access) + '</span>' : '') +
+      '</p>' +
+    '</section>';
+
+    /* Stat cards */
+    var perf = d.performance || {};
+    var summary = perf.summary || {};
+    html += '<div class="gpn-stats">' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Wallet</span><span class="gpn-stat-value gold">' + GPN.formatCurrency(d.walletBalance || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Tests Taken</span><span class="gpn-stat-value">' + (summary.tests || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Average Score</span><span class="gpn-stat-value cyan">' + GPN.formatPercent(summary.avg || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Highest</span><span class="gpn-stat-value green">' + GPN.formatPercent(summary.highest || 0) + '</span></div>' +
+    '</div>';
+
+    /* Upcoming schedule */
+    var schedule = d.schedule || [];
+    var upcoming = schedule.filter(function (x) {
+      var dt = GPN.parseDate(x.Date);
+      return dt && dt.getTime() >= Date.now() - 86400000;
+    }).slice(0, 5);
+
+    if (upcoming.length) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Upcoming Schedule</h3></div>' +
+        '<div class="gpn-card-body">' +
+          upcoming.map(function (x) {
+            return '<div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">' +
+              '<div>' +
+                '<div class="gpn-strong">' + GPN.esc(x.Type || '') + '</div>' +
+                '<div class="gpn-quiet">' + GPN.esc(GPN.formatDate(x.Date)) + (x.StartTime ? ' · ' + GPN.esc(x.StartTime) : '') + '</div>' +
+              '</div>' +
+              '<span class="gpn-pill info">' + GPN.esc(x.Status || 'ACTIVE') + '</span>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Results */
+    var results = d.results || [];
+    if (results.length) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Test Results</h2>' +
+        '<div class="gpn-card"><div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Test</th><th>Subject</th><th>Score</th><th>%</th><th>Date</th></tr></thead><tbody>' +
+            results.slice(0, 20).map(function (r) {
+              return '<tr>' +
+                '<td data-label="Test">' + GPN.esc(r.TestTitle || r.TestID || '') + '</td>' +
+                '<td data-label="Subject">' + GPN.esc(r.SubjectName || r.SubjectID || '—') + '</td>' +
+                '<td data-label="Score">' + GPN.esc(r.MarksObtained) + ' / ' + GPN.esc(r.MaxMarks) + '</td>' +
+                '<td data-label="%" style="color:var(--gold);font-weight:700;">' + GPN.esc(r.Percentage) + '</td>' +
+                '<td data-label="Date">' + GPN.esc(GPN.formatDate(r.PublishedDate || r.TestDate)) + '</td>' +
+              '</tr>';
+            }).join('') +
+          '</tbody></table>' +
+        '</div></div>' +
+      '</section>';
+    }
+
+    /* Performance by subject */
+    var bySubject = perf.bySubject || [];
+    if (bySubject.length) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Performance by Subject</h2>' +
+        '<div class="gpn-card"><div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Subject</th><th>Avg %</th><th>Tests</th></tr></thead><tbody>' +
+            bySubject.map(function (x) {
+              return '<tr>' +
+                '<td data-label="Subject">' + GPN.esc(x.name) + '</td>' +
+                '<td data-label="Avg %" style="color:var(--gold);font-weight:700;">' + GPN.formatPercent(x.avg || 0) + '</td>' +
+                '<td data-label="Tests">' + (x.tests || 0) + '</td>' +
+              '</tr>';
+            }).join('') +
+          '</tbody></table>' +
+        '</div></div>' +
+      '</section>';
+    }
+
+    /* Wallet ledger */
+    var history = d.walletHistory || [];
+    if (history.length) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Wallet Activity</h2>' +
+        '<div class="gpn-card"><div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Balance</th></tr></thead><tbody>' +
+            history.slice(0, 20).map(function (h) {
+              var amt = Number(h.Amount || 0);
+              return '<tr>' +
+                '<td data-label="Date">' + GPN.esc(GPN.formatDateTime(h.EntryDate)) + '</td>' +
+                '<td data-label="Type">' + GPN.esc(h.Type || '') + '</td>' +
+                '<td data-label="Amount" style="color:' + (amt >= 0 ? 'var(--success)' : 'var(--error)') + ';font-weight:700;">' + (amt >= 0 ? '+' : '') + GPN.formatCurrency(amt) + '</td>' +
+                '<td data-label="Balance">' + GPN.formatCurrency(h.BalanceAfter || 0) + '</td>' +
+              '</tr>';
+            }).join('') +
+          '</tbody></table>' +
+        '</div></div>' +
+      '</section>';
+    }
+
+    /* Remarks */
+    var remarks = d.remarks || [];
+    if (remarks.length) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Teacher Remarks</h3></div>' +
+        '<div class="gpn-card-body">' +
+          remarks.slice(0, 5).map(function (r) {
+            return '<div style="padding:8px 0;border-bottom:1px solid var(--border-hair);">' +
+              '<div>' + GPN.esc(r.Text || '') + '</div>' +
+              '<div class="gpn-quiet" style="margin-top:4px;font-size:0.72rem;">' + GPN.esc(GPN.formatDateTime(r.CreatedDate)) + '</div>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Footer */
+    html += '<footer class="gpn-footer"><div>Guided Path Noida · Online view</div></footer>';
+
+    GPN.byId('viewRoot').innerHTML = html;
+  }
+
+
+  /* ==========================================================
+     OFFLINE TAB — lazy-load read-only hq- data
+     ========================================================== */
+  function renderOfflineTab() {
+    if (!loaded.offline) {
+      GPN.showContainerLoading(GPN.byId('viewRoot'), 'Loading Offline data…');
+      GPN.api('studentMasterOffline').then(function (j) {
+        DATA.offline = (j && j.ok) ? j.data : null;
+        loaded.offline = true;
+        renderOfflineTab();
+      }).catch(function () {
+        GPN.showContainerError(GPN.byId('viewRoot'), 'Failed to load Offline data.');
+      });
+      return;
+    }
+
+    var d = DATA.offline;
+    if (!d) {
+      GPN.showContainerError(GPN.byId('viewRoot'), 'Offline data unavailable.');
+      return;
+    }
+
+    if (!d.linked) {
+      var reason = d.reason || 'no_offline_link';
+      var msg = 'You are not linked to an Offline programme record.';
+      if (reason === 'offline_record_missing')   msg = 'Your linked Offline record could not be found.';
+      if (reason === 'offline_record_inactive')  msg = 'Your linked Offline record is inactive.';
+      return renderNotLinked('Offline Programme', msg);
+    }
+
+    var s = d.student || {};
+    var html = '';
+
+    /* Read-only notice */
+    html += '<div class="gpn-alert gpn-alert-info" style="margin-bottom:14px;">' +
+      '<b>View-only.</b> This shows your Offline programme data. For fee updates or corrections, ' +
+      'please contact the admin.' +
+    '</div>';
+
+    /* Student header */
+    var sub = GPN.esc(s.StudentID || '');
+    if (s.Class)  sub += ' · ' + GPN.esc(s.Class);
+    if (s.School) sub += ' · ' + GPN.esc(s.School);
+
+    html += '<section class="gpn-welcome">' +
+      '<h1 class="gpn-welcome-title">Offline: ' + GPN.esc(s.Name || '') + '</h1>' +
+      '<p class="gpn-welcome-sub">' + sub + '</p>' +
+    '</section>';
+
+    /* Stat cards */
+    var fees = d.fees || {};
+    var feesSummary = fees.summary || {};
+    var perf = d.performance || {};
+    var attCur = (d.attendance && d.attendance.current) || { percent: 0 };
+    var rankDisplay = d.rank ? ('#' + d.rank) : '—';
+
+    html += '<div class="gpn-stats">' +
+      '<div class="gpn-stat">' +
+        '<span class="gpn-stat-label">Fees Status</span>' +
+        '<span class="gpn-stat-value ' + GPN.esc(String(feesSummary.status || 'none').toLowerCase().replace(/\s/g, '-')) + '">' +
+          GPN.esc(feesSummary.status || '—') +
+        '</span>' +
+      '</div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Attendance</span><span class="gpn-stat-value cyan">' + GPN.formatPercent(attCur.percent || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Overall Avg</span><span class="gpn-stat-value gold">' + GPN.formatPercent(perf.overallAvg || 0) + '</span></div>' +
+      '<div class="gpn-stat"><span class="gpn-stat-label">Rank</span><span class="gpn-stat-value ' + (d.rank === 1 ? 'gold' : '') + '">' + GPN.esc(rankDisplay) + '</span></div>' +
+    '</div>';
+
+    /* Current fee cycle */
+    if (feesSummary.status) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Fees Summary</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span class="gpn-quiet">Current Cycle</span><span class="gpn-strong" style="color:var(--cyan-bright);">' + GPN.esc(feesSummary.cycleLabel || '—') + '</span></div>' +
+          '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span class="gpn-quiet">Deadline</span><span>' + GPN.esc(GPN.formatDate(feesSummary.deadline)) + '</span></div>' +
+          '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span class="gpn-quiet">Total Due</span><span style="color:' + ((feesSummary.due || 0) > 0 ? 'var(--error)' : 'var(--success)') + ';font-weight:700;">' + GPN.formatCurrency(feesSummary.due || 0) + '</span></div>' +
+          ((feesSummary.daysLate || 0) > 0 ? '<div class="gpn-alert gpn-alert-warn" style="margin-top:10px;"><b>' + feesSummary.daysLate + ' day(s) overdue.</b> Please contact us.</div>' : '') +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Batches */
+    if (d.batches && d.batches.length) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Batches</h3></div>' +
+        '<div class="gpn-card-body">' +
+          d.batches.map(function (b) {
+            return '<div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">' +
+              '<div>' +
+                '<div class="gpn-strong" style="color:var(--cyan-bright);">' + GPN.esc(b.name || '') + '</div>' +
+                '<div class="gpn-quiet">' + GPN.esc(b.startTime || '') + (b.endTime ? ' – ' + GPN.esc(b.endTime) : '') + (b.days ? ' · ' + GPN.esc(b.days) : '') + '</div>' +
+              '</div>' +
+              '<span class="gpn-pill info">Active</span>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Attendance */
+    if (d.attendance) {
+      var cur = d.attendance.current || {};
+      var byMonth = d.attendance.byMonth || {};
+      var monthKeys = Object.keys(byMonth).sort().reverse();
+
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Attendance</h2>' +
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">This Month</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div class="gpn-stats" style="margin-bottom:0;">' +
+            '<div class="gpn-stat"><span class="gpn-stat-label">Present</span><span class="gpn-stat-value green">' + (cur.present || 0) + '</span></div>' +
+            '<div class="gpn-stat"><span class="gpn-stat-label">Absent</span><span class="gpn-stat-value error">' + (cur.absent || 0) + '</span></div>' +
+            '<div class="gpn-stat"><span class="gpn-stat-label">Total Days</span><span class="gpn-stat-value">' + (cur.total || 0) + '</span></div>' +
+            '<div class="gpn-stat"><span class="gpn-stat-label">Percent</span><span class="gpn-stat-value cyan">' + GPN.formatPercent(cur.percent || 0) + '</span></div>' +
+          '</div>' +
+        '</div></div>';
+
+      if (monthKeys.length) {
+        html += '<div class="gpn-card">' +
+          '<div class="gpn-card-head"><h3 class="gpn-card-title">Monthly History</h3></div>' +
+          '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+            '<table class="gpn-table"><thead><tr><th>Month</th><th>Present</th><th>Absent</th><th>Total</th><th>%</th></tr></thead><tbody>' +
+              monthKeys.map(function (k) {
+                var m = byMonth[k];
+                return '<tr>' +
+                  '<td data-label="Month">' + GPN.esc(k) + '</td>' +
+                  '<td data-label="Present">' + (m.present || 0) + '</td>' +
+                  '<td data-label="Absent">' + (m.absent || 0) + '</td>' +
+                  '<td data-label="Total">' + (m.total || 0) + '</td>' +
+                  '<td data-label="%" style="color:var(--gold);font-weight:700;">' + GPN.formatPercent(m.percent || 0) + '</td>' +
+                '</tr>';
+              }).join('') +
+            '</tbody></table>' +
+          '</div>' +
+        '</div>';
+      }
+      html += '</section>';
+    }
+
+    /* Test scores */
+    var tests = d.tests || [];
+    if (tests.length) {
+      var byMonthT = {};
+      tests.forEach(function (x) {
+        var m = x.MonthLabel || 'Unknown';
+        if (!byMonthT[m]) byMonthT[m] = [];
+        byMonthT[m].push(x);
+      });
+      var monthKeysT = Object.keys(byMonthT);
+
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Test Scores</h2>';
+
+      monthKeysT.forEach(function (m) {
+        var list = byMonthT[m];
+        list.sort(function (a, b) {
+          var wa = ['M1','M2','M3','M4','Major'].indexOf(a.WeekLabel);
+          var wb = ['M1','M2','M3','M4','Major'].indexOf(b.WeekLabel);
+          return wa - wb;
+        });
+
+        html += '<div class="gpn-card">' +
+          '<div class="gpn-card-head"><h3 class="gpn-card-title">' + GPN.esc(m) + '</h3></div>' +
+          '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+            '<table class="gpn-table"><thead><tr><th>Week</th><th>Type</th><th>Subject</th><th>Score</th><th>%</th><th>Date</th></tr></thead><tbody>' +
+              list.map(function (x) {
+                return '<tr>' +
+                  '<td data-label="Week">' + GPN.esc(x.WeekLabel || '') + '</td>' +
+                  '<td data-label="Type">' + GPN.esc(x.TestType || '') + '</td>' +
+                  '<td data-label="Subject">' + GPN.esc(x.Subject || '—') + '</td>' +
+                  '<td data-label="Score">' + GPN.esc(x.Score) + ' / ' + GPN.esc(x.Max) + '</td>' +
+                  '<td data-label="%" style="color:var(--gold);font-weight:700;">' + GPN.esc(x.Percent) + '</td>' +
+                  '<td data-label="Date">' + GPN.esc(GPN.formatDate(x.TestDate)) + '</td>' +
+                '</tr>';
+              }).join('') +
+            '</tbody></table>' +
+          '</div>' +
+        '</div>';
+      });
+      html += '</section>';
+    }
+
+    /* Files */
+    var files = d.files || [];
+    if (files.length) {
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Study Files</h2>';
+      files.forEach(function (file) {
+        var viewed = file.viewed === true;
+        html += '<div class="gpn-card" style="margin-bottom:12px;">' +
+          '<div class="gpn-card-body">' +
+            '<div class="gpn-row-between" style="margin-bottom:8px;">' +
+              '<div class="gpn-strong" style="color:var(--cyan-bright);font-family:var(--font-serif);font-size:1rem;">' + GPN.esc(file.FileName) + '</div>' +
+              (viewed ? '<span class="gpn-pill active">Viewed</span>' : '<span class="gpn-pill draft">New</span>') +
+            '</div>' +
+            '<div class="gpn-quiet" style="margin-bottom:12px;">Uploaded ' + GPN.esc(GPN.formatDate(file.UploadDate)) + '</div>' +
+            '<div class="gpn-file-actions">' +
+              '<a class="gpn-file-btn gpn-file-btn-view" href="' + GPN.esc(file.DriveURL) + '" target="_blank" rel="noopener">Open File</a>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      html += '</section>';
+    }
+
+    /* Badges */
+    if (d.badges && d.badges.length) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Badges Earned</h3></div>' +
+        '<div class="gpn-card-body" style="display:flex;flex-wrap:wrap;gap:8px;">' +
+          d.badges.map(function (b) { return '<span class="gpn-pill gold">' + GPN.esc(b) + '</span>'; }).join('') +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Progress report (bilingual) */
+    if (d.progressReport) {
+      var pr = d.progressReport;
+      var dirTone = 'info';
+      if (pr.overallDir === 'up')    dirTone = 'green';
+      if (pr.overallDir === 'down')  dirTone = 'error';
+      if (pr.overallDir === 'stable')dirTone = 'warn';
+      if (pr.overallDir === 'no_data') dirTone = 'draft';
+
+      html += '<section class="gpn-section">' +
+        '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Progress Report</h2>' +
+        '<div class="gpn-card">' +
+          '<div class="gpn-card-body" style="padding:14px;border-left:3px solid var(--cyan);">' +
+            '<div class="gpn-pill ' + GPN.esc(dirTone) + '" style="margin-bottom:8px;">Overall</div>' +
+            '<div class="gpn-strong" style="color:var(--cyan-bright);line-height:1.5;">' + GPN.esc(pr.overallLabel || '—') + '</div>' +
+            '<div class="gpn-quiet" style="margin-top:6px;line-height:1.5;">' + GPN.esc(pr.overallLabelHindi || '') + '</div>' +
+          '</div>' +
+        '</div>';
+
+      var t = pr.testTrend || {};
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Test Performance</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div class="gpn-strong" style="line-height:1.5;">' + GPN.esc(t.label || '—') + '</div>' +
+          '<div class="gpn-quiet" style="margin-top:6px;line-height:1.5;">' + GPN.esc(t.labelHindi || '') + '</div>' +
+        '</div>' +
+      '</div>';
+
+      var a = pr.attTrend || {};
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Attendance Trend</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div class="gpn-strong" style="line-height:1.5;">' + GPN.esc(a.label || '—') + '</div>' +
+          '<div class="gpn-quiet" style="margin-top:6px;line-height:1.5;">' + GPN.esc(a.labelHindi || '') + '</div>' +
+        '</div>' +
+      '</div>';
+
+      var f = pr.filesTrend || {};
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Study Files Trend</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div class="gpn-strong" style="line-height:1.5;">' + GPN.esc(f.label || '—') + '</div>' +
+          '<div class="gpn-quiet" style="margin-top:6px;line-height:1.5;">' + GPN.esc(f.labelHindi || '') + '</div>' +
+          (f.alert ? '<div class="gpn-alert gpn-alert-warn" style="margin-top:10px;">' + GPN.esc(f.alert) + '</div>' : '') +
+        '</div>' +
+      '</div>' +
+      '</section>';
+    }
+
+    /* Teacher remark */
+    if (d.remark) {
+      html += '<div class="gpn-card">' +
+        '<div class="gpn-card-head"><h3 class="gpn-card-title">Teacher Remark</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<div style="line-height:1.7;">' + GPN.esc(d.remark) + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Footer */
+    html += '<footer class="gpn-footer"><div>Guided Path Noida · Offline view</div></footer>';
+
+    GPN.byId('viewRoot').innerHTML = html;
+  }
+
+
+  /* ==========================================================
+     NOT LINKED STATE
+     ========================================================== */
+  function renderNotLinked(moduleName, message) {
+    var wa = GPN.cfg('WHATSAPP', 'https://wa.me/guidedpathnoida');
+    GPN.byId('viewRoot').innerHTML =
+      '<div class="gpn-admin-hero">' +
+        '<h1 class="gpn-admin-hero-title">' + GPN.esc(moduleName) + '</h1>' +
+        '<p class="gpn-admin-hero-sub">' + GPN.esc(message) + '</p>' +
+      '</div>' +
+      '<div class="gpn-card"><div class="gpn-card-body">' +
+        '<p style="color:var(--tx-dim);line-height:1.7;margin-bottom:16px;">' +
+          'If this is unexpected, please contact us on WhatsApp so we can correct the link.' +
+        '</p>' +
+        '<a class="gpn-btn gpn-btn-primary" href="' + GPN.esc(wa) + '" target="_blank" rel="noopener">Contact us on WhatsApp</a>' +
+      '</div></div>';
+  }
+
+
+  /* ==========================================================
+     CHANGE PASSWORD
+     ========================================================== */
+  function handleChangePassword() {
+    var alertBox = GPN.byId('pwAlert');
+    var btn      = GPN.byId('pwSubmit');
+    alertBox.hidden = true;
+
+    var current = GPN.byId('pwCurrent').value;
+    var next    = GPN.byId('pwNew').value;
+    var confirm = GPN.byId('pwConfirm').value;
+
+    if (!current || !next || !confirm) { showPwError('Please fill in all fields.'); return; }
+    if (next.length < 10) { showPwError('New password must be at least 10 characters.'); return; }
+    if (next !== confirm) { showPwError('New password and confirmation do not match.'); return; }
+    if (next === current) { showPwError('New password must differ from the current one.'); return; }
+
+    GPN.setLoading(btn, true, 'Updating…');
+
+    GPN.api('auth.changePassword', {
+      currentPassword: current,
+      newPassword:     next
+    }).then(function (j) {
+      GPN.setLoading(btn, false);
+
+      if (!j || !j.ok) {
+        showPwError(GPN.friendlyError(j));
+        return;
+      }
+
+      GPN.Session.save(j.data || {});
+      exitForcedMode();
+      GPN.Modal.close('pwModal');
+      GPN.Toast.ok('Password updated successfully.');
+
+      setTimeout(function () {
+        window.location.replace('student-master.html');
+      }, 700);
+    });
+  }
+
+  function showPwError(msg) {
+    var el = GPN.byId('pwAlert');
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+})();
+</script>
+</body>
+</html>

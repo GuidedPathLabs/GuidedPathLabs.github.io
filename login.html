@@ -133,7 +133,7 @@
           } else {
             modeSubtitle.textContent = 'Student Sign In';
             idLabel.textContent      = 'Student ID';
-            idInput.placeholder      = 'e.g. ol-arnav042 / hq-priya108';
+            idInput.placeholder      = 'e.g. ol-arnav042 / hq-priya108 / pr-rajesh001';
             idInput.setAttribute('autocomplete', 'username');
             modeSwitch.textContent   = 'Admin Login →';
             document.title           = 'Sign In — Guided Path Noida';
@@ -142,6 +142,15 @@
           idInput.value = '';
           pwInput.value = '';
           idInput.focus();
+        }
+
+        /* ----------------------------------------------------------
+         * Append ?mustChange=1 to a landing path
+         * -------------------------------------------------------- */
+        function withMustChange(path) {
+          if (!path) return 'login.html?mustChange=1';
+          var sep = path.indexOf('?') >= 0 ? '&' : '?';
+          return path + sep + 'mustChange=1';
         }
 
         /* ----------------------------------------------------------
@@ -197,10 +206,17 @@
             /* Save session */
             GPN.Session.save(json.data || {});
 
-            GPN.Toast.ok('Welcome, ' + (json.data.name || json.data.userId || loginId));
-
-            /* Route to landing page based on role + module */
+            /* Determine landing page from session */
             var dest = GPN.Session.landingPage();
+
+            /* If backend says password change is required, force it */
+            if (json.data && json.data.mustChange === true) {
+              dest = withMustChange(dest);
+              GPN.Toast.warn('Please change your password to continue.');
+            } else {
+              GPN.Toast.ok('Welcome, ' + (json.data.name || json.data.userId || loginId));
+            }
+
             setTimeout(function () {
               window.location.href = dest;
             }, 400);
@@ -236,27 +252,7 @@
     })();
   </script>
 </body>
-</html>ord: pw, role: currentRole });
-
-  btn.disabled = false;
-  btn.textContent = old;
-
-  if (!res || !res.ok) {
-    var msg = (res && res.error) || 'Sign-in failed.';
-    if (res && res.code === 'INVALID_CREDENTIALS') msg = 'Invalid ID or password.';
-    if (res && res.code === 'ACCOUNT_INACTIVE') msg = 'Your account is inactive. Contact your teacher.';
-    return showError(msg);
-  }
-
-  var d = res.data || {};
-  localStorage.setItem(K_TOKEN, d.token || '');
-  localStorage.setItem(K_ROLE,  String(d.role || currentRole).toUpperCase());
-  localStorage.setItem(K_USER,  d.userId || lid);
-  localStorage.setItem(K_NAME,  d.name || '');
-
-  toast('Welcome, ' + (d.name || d.userId) + '.', 'ok');
-
-  setTimeout(function () {
+</html>etTimeout(function () {
     window.location.href = (String(d.role).toUpperCase() === 'ADMIN') ? 'admin.html' : 'student.html';
   }, 400);
 });

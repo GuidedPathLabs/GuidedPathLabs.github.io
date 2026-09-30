@@ -13,9 +13,6 @@
 </head>
 <body class="gpn-login-shell">
 
-  <!-- ============================================================
-       CENTERED LOADING CARD
-       ============================================================ -->
   <main class="gpn-login-card" style="text-align: center;">
 
     <div class="gpn-login-brand">
@@ -48,9 +45,6 @@
 
   </main>
 
-  <!-- ============================================================
-       SCRIPTS
-       ============================================================ -->
   <script src="shared/config.js?v=1.0.0"></script>
   <script src="shared/gpn.js?v=1.0.0"></script>
   <script>
@@ -59,10 +53,6 @@
 
       GPN.ready(function () {
 
-        /* ----------------------------------------------------------
-         * 1. Honour an optional ?to= param for direct deep links.
-         *    Allowed destinations only — no open redirect.
-         * -------------------------------------------------------- */
         var q = GPN.query();
         var to = String((q && q.to) || '').toLowerCase().trim();
 
@@ -74,8 +64,34 @@
           'admin':    'admin.html'
         };
 
-        /* Public deep links — work even when logged out */
-        var PUBLIC_LINKS = ['estore.html', 'terms.html', 'login.html'];
+        if (to && DEEP_LINKS[to]) {
+          var dest = DEEP_LINKS[to];
+          if (dest === 'admin.html' && !GPN.Session.isLoggedIn()) {
+            window.location.replace('login.html?role=admin');
+            return;
+          }
+          window.location.replace(dest);
+          return;
+        }
+
+        if (GPN.Session.isLoggedIn()) {
+          var landing = GPN.Session.landingPage();
+          window.location.replace(landing);
+          return;
+        }
+
+        window.location.replace('login.html');
+
+        setTimeout(function () {
+          var fb = document.getElementById('fallbackLinks');
+          if (fb) fb.hidden = false;
+        }, 3000);
+      });
+
+    })();
+  </script>
+</body>
+</html>login.html'];
 
         if (to && DEEP_LINKS[to]) {
           var dest = DEEP_LINKS[to];
@@ -114,5 +130,68 @@
 
     })();
   </script>
+</body>
+</html>border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .footer-note{text-align:center;font-size:.73rem;color:#4a6a8a;margin-top:22px;line-height:1.9;}
+    .footer-note a{color:#ffd54f;text-decoration:none;opacity:.8;}
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo-wrap">
+    <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEg7b04OQ83kS-lsds5QWi2b9XX0_FiMNMRUK7IGgC5vMEUjIX9HBxTc6HIzjNjj99MNGv83pS1_mMTIEa53AqTELuU5W3OJ3871USQCrDLqyESq08qQCeC7TtZ5klV9VNG5OPM9UM8sSWQLXTur9kpw15GI60PdnP8W1CeJsyhlqKtTx_nvOSkxaFwGxw_1/s1024/1000160208.png" alt="GPN" id="logoImg"/>
+    <div class="brand-name">Guided Path Noida</div>
+    <div class="brand-tag">आसान पढ़ाई &nbsp;·&nbsp; मजबूत तैयारी &nbsp;·&nbsp; बेहतर परिणाम</div>
+  </div>
+  <div class="divider"></div>
+  <div class="portal-label">🎓 Student Portal</div>
+  <div class="field">
+    <label for="userId">Student / Admin ID</label>
+    <input type="text" id="userId" placeholder="Enter your ID" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="none"/>
+  </div>
+  <div class="field">
+    <label for="password">Password</label>
+    <input type="password" id="password" placeholder="Enter your password"/>
+  </div>
+  <button class="btn-login" onclick="doLogin()">Login &rarr;</button>
+  <div class="msg" id="msgBox"></div>
+  <div class="footer-note">Trouble? <a href="mailto:gpn.care@gmail.com">gpn.care@gmail.com</a></div>
+</div>
+<script>
+const APPS_SCRIPT_URL="https://script.google.com/macros/s/AKfycbzO3sf2bgSstGAlpnGAEIGPkcTR7ulIWJDVxavY-uK-QUA7U12c7My4CYV3Yvn5kF4S/exec";
+const logoImg=document.getElementById('logoImg');
+if(logoImg)logoImg.addEventListener('load',function(){logoImg.classList.add('loaded');});
+document.addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
+function showMsg(t,type){var b=document.getElementById('msgBox');b.className='msg '+type;b.innerHTML=type==='loading'?'<span class="spinner"></span>'+t:t;}
+async function doLogin(){
+  var id=document.getElementById('userId').value.trim();
+  var pw=document.getElementById('password').value.trim();
+  if(!id||!pw){showMsg('Please enter both ID and Password.','error');return;}
+  showMsg('Verifying credentials…','loading');
+  try{
+    var res=await fetch(APPS_SCRIPT_URL+'?action=login&id='+encodeURIComponent(id)+'&password='+encodeURIComponent(pw));
+    var j=await res.json();
+    if(j.status==='success'){
+      if(j.role==='admin'){
+        sessionStorage.setItem('gpn_admin',JSON.stringify(j.admin));
+        sessionStorage.setItem('gpn_token',j.token);
+        window.location.assign('admin.html');
+      } else {
+        sessionStorage.setItem('gpn_student',JSON.stringify(j.student));
+        sessionStorage.setItem('gpn_student_token',j.token||'');
+        window.location.assign('dashboard.html');
+      }
+    }else{showMsg(j.message||'Invalid ID or Password.','error');}
+  }catch(e){showMsg('Could not connect. Please try again.','error');}
+}
+// iframe height reporting
+function sendHeight(){
+  var h=document.body.scrollHeight;
+  window.parent.postMessage({type:'gpn-resize',height:h},'*');
+}
+window.addEventListener('load',sendHeight);
+window.addEventListener('resize',sendHeight);
+</script>
 </body>
 </html>

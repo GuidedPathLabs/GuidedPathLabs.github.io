@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Master Students — GPN Admin</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body>
+
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">Master <b>Students</b></div>
+    </div>
+    <div class="gpn-topbar-user">
+      <span class="gpn-user-badge" id="userBadge">—</span>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnLogout" type="button">Logout</button>
+    </div>
+  </header>
+
+  <nav class="gpn-navstrip">
+    <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
+    <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
+    <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn active" href="admin-master.html">Master</a>
+    <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
+    <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
+    <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
+    <a class="gpn-navstrip-btn" href="admin-settings.html">Settings</a>
+  </nav>
+
+  <main class="gpn-main">
+
+    <div class="gpn-chips" id="subTabs">
+      <button class="gpn-chip active" data-view="overview">Overview</button>
+      <button class="gpn-chip" data-view="students">Master Students</button>
+      <button class="gpn-chip" data-view="upgrade">Upgrade</button>
+    </div>
+
+    <div id="viewRoot">
+      <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+    </div>
+
+  </main>
+</div>
+
+<div class="gpn-modal" id="modalGeneric" hidden>
+  <div class="gpn-modal-card" id="modalGenericCard"></div>
+</div>
+
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  if (!GPN.Guard.requireAdmin()) return;
+
+  var viewRoot = null;
+  var appRoot  = null;
+  var cacheCandidates = null;
+
+  GPN.ready(function () {
+    appRoot  = GPN.byId('appRoot');
+    viewRoot = GPN.byId('viewRoot');
+
+    GPN.byId('userBadge').textContent = GPN.Session.getName() || 'Admin';
+    GPN.byId('userBadge').title = GPN.Session.getUser() || '';
+
+    GPN.$$('#subTabs .gpn-chip').forEach(function (btn) {
+      GPN.on(btn, 'click', function () {
+        GPN.$$('#subTabs .gpn-chip').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        render(btn.dataset.view);
+      });
+    });
+
+    GPN.on(GPN.byId('btnLogout'), 'click', function () {
+      if (confirm('Sign out?')) GPN.Guard.logout();
+    });
+
+    GPN.Modal.wire('modalGeneric');
+
+    appRoot.hidden = false;
+    GPN.byId('pageLoading').hidden = true;
+
+    render('overview');
+  });
+
+  function render(view) {
+    GPN.showContainerLoading(viewRoot, 'Loading…');
+    var fn = VIEWS[view] || VIEWS.overview;
+    Promise.resolve(fn()).catch(function (err) {
+      console.error(view, err);
+      GPN.showContainerError(viewRoot, 'Failed to load.');
+    });
+  }
+
+  function openModal(html, onReady) {
+    GPN.byId('modalGenericCard').innerHTML = html;
+    GPN.Modal.open('modalGeneric');
+    if (typeof onReady === 'function') setTimeout(onReady, 20);
+  }
+  function closeModal() { GPN.Modal.close('modalGeneric'); }
+
+  function esc(s) { return GPN.esc(s); }
+  function fmtDate(d) { return GPN.formatDate(d); }
+  function pill(text, tone) {
+    var cls = tone || String(text || '').toLowerCase().replace(/[^a-z]/g, '');
+    return '<span class="gpn-pill ' + esc(cls) + '">' + esc(text) + '</span>';
+  }
+
+  function classSelect(id, value) {
+    var opts = (window.GPN_CONFIG.CLASSES || []).map(function (c) {
+      return '<option value="' + esc(c) + '"' + (value === c ? ' selected' : '') + '>' + esc(c) + '</option>';
+    }).join('');
+    return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
+  }
+  function boardSelect(id, value) {
+    var opts = (window.GPN_CONFIG.BOARDS || []).map(function (b) {
+      return '<option value="' + esc(b) + '"' + (value === b ? ' selected' : '') + '>' + esc(b) + '</option>';
+    }).join('');
+    return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
+  }
+
+  function loadCandidates(force) {
+    if (cacheCandidates && !force) return Promise.resolve(cacheCandidates);
+    return GPN.api('adminMasterCandidatesForUpgrade').then(function (j) {
+      if (!j || !j.ok) {
+        cacheCandidates = { onlineCandidates: [], offlineCandidates: [] };
+        return cacheCandidates;
+      }
+      cacheCandidates = {
+        onlineCandidates:  (j.data && j.data.onlineCandidates)  || [],
+        offlineCandidates: (j.data && j.data.offlineCandidates) || []
+      };
+      return cacheCandidates;
+    });
+  }
+  function invalidateCandidates() { cacheCandidates = null; }
+
+  var VIEWS = {};
+
+  VIEWS.overview = function () {
+    return Promise.all([
+      GPN.api('adminMasterListStudents'),
+      loadCandidates(true)
+    ]).then(function (res) {
+      var j = res[0];
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var students = (j.data && j.data.students) || [];
+
+      var total = students.length;
+      var both = students.filter(function (s) { return s.HasOnline && s.HasOffline; }).length;
+      var onlyOl = students.filter(function (s) { return s.HasOnline && !s.HasOffline; }).length;
+      var onlyHq = students.filter(function (s) { return s.HasOffline && !s.HasOnline; }).length;
+      var none = students.filter(function (s) { return !s.HasOnline && !s.HasOffline; }).length;
+
+      var c = cacheCandidates || { onlineCandidates: [], offlineCandidates: [] };
+
+      var html =
+        '<div class="gpn-stats">' +
+          statCard('Total Master', total) +
+          statCard('Both Linked', both, 'green') +
+          statCard('Only Online', onlyOl, 'info') +
+          statCard('Only Offline', onlyHq, 'info') +
+          statCard('No Links', none, 'error') +
+          statCard('Upgrade Ready (Ol-)', (c.onlineCandidates || []).length, 'warn') +
+          statCard('Upgrade Ready (Hq-)', (c.offlineCandidates || []).length, 'warn') +
+        '</div>' +
+
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">About Master Students</h3></div>' +
+        '<div class="gpn-card-body">' +
+          '<p style="color:var(--tx-dim);line-height:1.7;margin:0 0 14px;">' +
+            'A <b>Master (mp-)</b> student is enrolled in <b>both</b> Online and Offline programmes. ' +
+            'The mp- record links to one <b>ol-</b> student (Online DB) and one <b>hq-</b> student (Offline DB), ' +
+            'and lets them see a combined dashboard in one login.' +
+          '</p>' +
+          '<ul style="color:var(--tx-dim);line-height:1.9;padding-left:20px;margin:0 0 14px;">' +
+            '<li>The <b>ol-</b> record keeps receiving Online data (tests, materials, wallet).</li>' +
+            '<li>The <b>hq-</b> record keeps receiving Offline data (attendance, fees, batches).</li>' +
+            '<li>The <b>mp-</b> record is the login credential — the student sees both sides combined.</li>' +
+            '<li>Original ol-/hq- IDs remain active but are typically unused after upgrade.</li>' +
+          '</ul>' +
+          '<div class="gpn-row">' +
+            '<button class="gpn-btn gpn-btn-cyan" data-goto="students">Manage Master Students</button>' +
+            '<button class="gpn-btn gpn-btn-primary" data-goto="upgrade">Upgrade a Student</button>' +
+          '</div>' +
+        '</div></div>';
+
+      viewRoot.innerHTML = html;
+
+      GPN.$$('button[data-goto]').forEach(function (b) {
+        GPN.on(b, 'click', function () {
+          document.querySelector('#subTabs button[data-view="' + b.dataset.goto + '"]').click();
+        });
+      });
+    });
+  };
+
+  function statCard(label, value, tone) {
+    return '<div class="gpn-stat"><span class="gpn-stat-label">' + esc(label) + '</span><span class="gpn-stat-value ' + (tone || '') + '">' + esc(String(value)) + '</span></div>';
+  }
+
+  VIEWS.students = function () {
+    return GPN.api('adminMasterListStudents').then(function (j) {
+      if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
+      var rows = (j.data && j.data.students) || [];
+
+      var html = '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Master Students (' + rows.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddMaster">+ Add Master Student</button>' +
+        '</div><div class="gpn-card-body">' +
+        '<input class="gpn-search" id="masterSearch" placeholder="Search by name, ID, phone…">' +
+        '</div>';
+
+      if (!rows.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No master students yet. Click Add to create the first one.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr>' +
+            '<th>ID</th><th>Name</th><th>Class</th><th>Online Link</th><th>Offline Link</th><th>Status</th><th>Actions</th>' +
+          '</tr></thead><tbody id="masterRows">';
+        rows.forEach(function (s) { html += masterRow(s); });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnAddMaster'), 'click', function () { addMasterModal(); });
+
+      var search = GPN.byId('masterSearch');
+      if (search) {
+        GPN.on(search, 'input', GPN.debounce(function () {
+          var q = search.value.toLowerCase().trim();
+          GPN.$$('#masterRows tr').forEach(function (tr) {
+            tr.style.display = (!q || (tr.dataset.search || '').toLowerCase().indexOf(q) >= 0) ? '' : 'none';
+          });
+        }, 150));
+      }
+
+      GPN.$$('#masterRows button[data-act]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () {
+          var id = btn.dataset.id;
+          var act = btn.dataset.act;
+          if (act === 'view')     viewMaster(id);
+          if (act === 'edit')     editMasterModal(id);
+          if (act === 'password') resetMasterPasswordModal(id);
+          if (act === 'delete')   deleteMaster(id);
+        });
+      });
+    });
+  };
+
+  function masterRow(s) {
+    var search = [s.Name, s.StudentID, s.Phone, s.OlID, s.HqID].join(' ').toLowerCase();
+
+    var olCell = s.HasOnline
+      ? '<span class="gpn-mono" style="font-size:0.72rem;">' + esc(s.OlID) + '</span>'
+      : pill('Not linked', 'draft');
+
+    var hqCell = s.HasOffline
+      ? '<span class="gpn-mono" style="font-size:0.72rem;">' + esc(s.HqID) + '</span>'
+      : pill('Not linked', 'draft');
+
+    return '<tr data-search="' + esc(search) + '">' +
+      '<td data-label="ID" class="gpn-mono">' + esc(s.StudentID) + '</td>' +
+      '<td data-label="Name">' + esc(s.Name) + '</td>' +
+      '<td data-label="Class">' + esc(s.Class || '—') + '</td>' +
+      '<td data-label="Online Link">' + olCell + '</td>' +
+      '<td data-label="Offline Link">' + hqCell + '</td>' +
+      '<td data-label="Status">' + pill(s.Status || '—') + '</td>' +
+      '<td data-label="Actions">' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="view" data-id="' + esc(s.StudentID) + '">View</button> ' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="edit" data-id="' + esc(s.StudentID) + '">Edit</button> ' +
+        '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="password" data-id="' + esc(s.StudentID) + '">Reset PW</button> ' +
+        '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-act="delete" data-id="' + esc(s.StudentID) + '">Delete</button>' +
+      '</td>' +
+    '</tr>';
+  }
+
+  function addMasterModal() {
+    GPN.showContainerLoading(viewRoot, 'Preparing…');
+    Promise.all([loadCandidates(true), Promise.resolve()]).then(function () {
+      VIEWS.students().then(function () {
+        openAddMasterModal();
+      });
+    });
+  }
+
+  function openAddMasterModal() {
+    var c = cacheCandidates || { onlineCandidates: [], offlineCandidates: [] };
+
+    var olOpts = '<option value="">— None / later —</option>' +
+      c.onlineCandidates.map(function (x) {
+        return '<option value="' + esc(x.StudentID) + '">' + esc(x.Name) + ' (' + esc(x.StudentID) + ')</option>';
+      }).join('');
+
+    var hqOpts = '<option value="">— None / later —</option>' +
+      c.offlineCandidates.map(function (x) {
+        return '<option value="' + esc(x.StudentID) + '">' + esc(x.Name) + ' (' + esc(x.StudentID) + ')</option>';
+      }).join('');
+
+    var html =
+      '<h3 class="gpn-modal-title">Add Master Student</h3>' +
+      '<p class="gpn-modal-sub">ID auto-generated as mp-&lt;firstname&gt;&lt;serial&gt;. Password defaults to phone digits.</p>' +
+
+      '<div class="gpn-field"><label class="gpn-label">Full Name</label><input id="amName" class="gpn-input"></div>' +
+
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Phone</label><input id="amPhone" class="gpn-input" inputmode="tel"><span class="gpn-hint">This becomes the default password.</span></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Email</label><input id="amEmail" class="gpn-input" inputmode="email"></div>' +
+      '</div>' +
+
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Class</label>' + classSelect('amClass') + '</div>' +
+        '<div class="gpn-field"><label class="gpn-label">Board</label>' + boardSelect('amBoard') + '</div>' +
+      '</div>' +
+
+      '<div class="gpn-field"><label class="gpn-label">School</label><input id="amSchool" class="gpn-input"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">Parent Name</label><input id="amParent" class="gpn-input" placeholder="Optional"></div>' +
+      '<div class="gpn-field"><label class="gpn-label">DOJ</label><input id="amDoj" class="gpn-input" type="date" value="' + GPN.todayISO() + '"></div>' +
+
+      '<div class="gpn-card" style="margin-top:14px;"><div class="gpn-card-head"><h3 class="gpn-card-title">Link Existing Students</h3></div>' +
+      '<div class="gpn-card-body">' +
+        '<div class="gpn-field"><label class="gpn-label">Online (ol-) Student</label>' +
+          '<select id="amOlId" class="gpn-select">' + olOpts + '</select>' +
+          '<span class="gpn-hint">' + c.onlineCandidates.length + ' unlinked online student(s) available.</span>' +
+        '</div>' +
+        '<div class="gpn-field"><label class="gpn-label">Offline (hq-) Student</label>' +
+          '<select id="amHqId" class="gpn-select">' + hqOpts + '</select>' +
+          '<span class="gpn-hint">' + c.offlineCandidates.length + ' unlinked offline student(s) available.</span>' +
+        '</div>' +
+        '<div class="gpn-alert gpn-alert-info" style="margin-top:10px;">' +
+          'At least one link is required. If you don\'t have the linked record yet, create the student in Online/Offline first, then come back.' +
+        '</div>' +
+      '</div></div>' +
+
+      '<div class="gpn-card" style="margin-top:14px;"><div class="gpn-card-head"><h3 class="gpn-card-title">Parent Account</h3></div>' +
+      '<div class="gpn-card-body">' +
+        '<div class="gpn-field"><label class="gpn-check"><input type="checkbox" id="amCreateParent"> <span>Also create a parent login for this student</span></label></div>' +
+        '<div id="amParentFields" style="display:none;margin-top:12px;">' +
+          '<div class="gpn-field"><label class="gpn-label">Parent Name</label><input id="amParentName" class="gpn-input" placeholder="Auto-filled from student parent name if blank"></div>' +
+          '<div class="gpn-grid-2">' +
+            '<div class="gpn-field"><label class="gpn-label">Parent Phone</label><input id="amParentPhone" class="gpn-input" inputmode="tel" placeholder="Defaults to student phone"><span class="gpn-hint">Becomes the parent\'s default password.</span></div>' +
+            '<div class="gpn-field"><label class="gpn-label">Parent Email</label><input id="amParentEmail" class="gpn-input" inputmode="email" placeholder="Optional"></div>' +
+          '</div>' +
+          '<div class="gpn-quiet" style="font-size:0.75rem;">Parent will get a pr- ID and default password = parent phone digits.</div>' +
+        '</div>' +
+      '</div></div>' +
+
+      '<div id="amError" class="gpn-alert gpn-alert-error" hidden style="margin-top:12px;"></div>' +
+
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="amCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-cyan" id="amSave">Create Master Student</button>' +
+      '</div>';
+
+    openModal(html, function () {
+      var cb = GPN.byId('amCreateParent');
+      var fields = GPN.byId('amParentFields');
+      GPN.on(cb, 'change', function () {
+        fields.style.display = cb.checked ? '' : 'none';
+        if (cb.checked) {
+          var pn = GPN.byId('amParentName');
+          var pp = GPN.byId('amParentPhone');
+          if (!pn.value) pn.value = GPN.byId('amParent').value.trim();
+          if (!pp.value) pp.value = GPN.byId('amPhone').value.trim();
+        }
+      });
+
+      GPN.on(GPN.byId('amCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('amSave'), 'click', function () {
+        var err = GPN.byId('amError'); err.hidden = true;
+
+        var phone = GPN.byId('amPhone').value.trim();
+        if (!phone) { err.textContent = 'Phone required (used as default password).'; err.hidden = false; return; }
+
+        var wantParent = cb.checked;
+        var pName = GPN.byId('amParentName').value.trim();
+        var pPhone = GPN.byId('amParentPhone').value.trim();
+        var pEmail = GPN.byId('amParentEmail').value.trim();
+
+        if (wantParent && !pPhone) {
+          err.textContent = 'Parent phone required (used as parent default password).';
+          err.hidden = false; return;
+        }
+
+        var payload = {
+          Name:               GPN.byId('amName').value.trim(),
+          Phone:              phone,
+          Email:              GPN.byId('amEmail').value.trim(),
+          Class:              GPN.byId('amClass').value,
+          Board:              GPN.byId('amBoard').value,
+          School:             GPN.byId('amSchool').value.trim(),
+          ParentName:         GPN.byId('amParent').value.trim(),
+          DOJ:                GPN.byId('amDoj').value,
+          OlID:               GPN.byId('amOlId').value,
+          HqID:               GPN.byId('amHqId').value,
+          AlsoCreateParent:   wantParent,
+          ParentName:         pName || GPN.byId('amParent').value.trim(),
+          ParentPhone:        pPhone,
+          ParentEmail:        pEmail
+        };
+
+        if (!payload.Name) {
+          err.textContent = 'Name required.'; err.hidden = false; return;
+        }
+        if (!payload.OlID && !payload.HqID) {
+          err.textContent = 'At least one of Online or Offline link is required.'; err.hidden = false; return;
+        }
+
+        var btn = GPN.byId('amSave');
+        GPN.setLoading(btn, true, 'Creating…');
+        GPN.api('adminMasterCreateStudent', payload).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          invalidateCandidates();
+
+          var msg = 'Master student: ' + r.data.StudentID + ' · PW: ' + r.data.DefaultPassword;
+          if (r.data.Parent && r.data.Parent.ParentID) {
+            msg += ' · Parent: ' + r.data.Parent.ParentID + ' · PW: ' + r.data.Parent.DefaultPassword;
+          }
+          GPN.Toast.ok(msg);
+          closeModal();
+          render('students');
+        });
+      });
+    });
+  }
+
+  function viewMaster(id) {
+    GPN.api('adminMasterGetStudent', { id: id }).then(function (j) {
+      if (!j.ok || !j.data || !j.data.student) { GPN.Toast.error('Student not found.'); return; }
+      var s = j.data.student;
+
+      var olSection = '';
+      if (s.OlStudent) {
+        olSection =
+          '<div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">' +
+            '<div><div class="gpn-strong" style="color:var(--cyan-bright);">' + esc(s.OlStudent.Name) + '</div>' +
+            '<div class="gpn-quiet gpn-mono" style="font-size:0.72rem;">' + esc(s.OlStudent.StudentID) + ' · ' + esc(s.OlStudent.Class || '') + '</div></div>' +
+            '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" id="vmUnlinkOl">Unlink</button>' +
+          '</div>';
+      } else {
+        olSection =
+          '<div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">' +
+            '<span class="gpn-quiet">No online link</span>' +
+            '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" id="vmLinkOl">Link Online</button>' +
+          '</div>';
+      }
+
+      var hqSection = '';
+      if (s.HqStudent) {
+        hqSection =
+          '<div class="gpn-row-between" style="padding:8px 0;">' +
+            '<div><div class="gpn-strong" style="color:var(--cyan-bright);">' + esc(s.HqStudent.Name) + '</div>' +
+            '<div class="gpn-quiet gpn-mono" style="font-size:0.72rem;">' + esc(s.HqStudent.StudentID) + ' · ' + esc(s.HqStudent.Class || '') + '</div></div>' +
+            '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" id="vmUnlinkHq">Unlink</button>' +
+          '</div>';
+      } else {
+        hqSection =
+          '<div class="gpn-row-between" style="padding:8px 0;">' +
+            '<span class="gpn-quiet">No offline link</span>' +
+            '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" id="vmLinkHq">Link Offline</button>' +
+          '</div>';
+      }
+
+      var html =
+        '<h3 class="gpn-modal-title">' + esc(s.Name || id) + '</h3>' +
+        '<p class="gpn-modal-sub">' + esc(s.StudentID) + ' · ' + esc(s.Class || '') + ' · ' + pill(s.Status || '') + '</p>' +
+
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Profile</h3></div><div class="gpn-card-body">' +
+          infoRow('Phone', s.Phone) +
+          infoRow('Email', s.Email) +
+          infoRow('School', s.School) +
+          infoRow('Parent', s.ParentName) +
+          infoRow('DOJ', fmtDate(s.DOJ)) +
+          infoRow('Last Login', s.LastLogin || '—') +
+        '</div></div>' +
+
+        '<div class="gpn-card"><div class="gpn-card-head"><h3 class="gpn-card-title">Linked Students</h3></div><div class="gpn-card-body">' +
+          olSection + hqSection +
+        '</div></div>' +
+
+        '<div class="gpn-modal-actions">' +
+          '<button class="gpn-btn gpn-btn-ghost" id="vmClose">Close</button>' +
+        '</div>';
+
+      openModal(html, function () {
+        GPN.on(GPN.byId('vmClose'), 'click', closeModal);
+
+        var uOl = GPN.byId('vmUnlinkOl');
+        if (uOl) GPN.on(uOl, 'click', function () { unlinkConfirm(id, 'ol'); });
+
+        var uHq = GPN.byId('vmUnlinkHq');
+        if (uHq) GPN.on(uHq, 'click', function () { unlinkConfirm(id, 'hq'); });
+
+        var lOl = GPN.byId('vmLinkOl');
+        if (lOl) GPN.on(lOl, 'click', function () { linkModal(id, 'ol'); });
+
+        var lHq = GPN.byId('vmLinkHq');
+        if (lHq) GPN.on(lHq, 'click', function () { linkModal(id, 'hq'); });
+      });
+    });
+  }
+
+  function infoRow(label, value) {
+    return '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);">' +
+      '<span class="gpn-quiet">' + esc(label) + '</span>' +
+      '<span class="gpn-strong" style="color:var(--cyan-bright);">' + esc(value || '—') + '</span>' +
+    '</div>';
+  }
+
+  function linkModal(mpId, module) {
+    var moduleName = module === 'ol' ? 'Online' : 'Offline';
+
+    GPN.showContainerLoading(GPN.byId('modalGenericCard'), 'Loading candidates…');
+    loadCandidates(true).then(function (c) {
+      var list = module === 'ol' ? c.onlineCandidates : c.offlineCandidates;
+
+      if (!list.length) {
+        GPN.byId('modalGenericCard').innerHTML =
+          '<h3 class="gpn-modal-title">Link ' + esc(moduleName) + '</h3>' +
+          '<div class="gpn-alert gpn-alert-info">No unlinked ' + esc(moduleName) + ' students available.</div>' +
+          '<div class="gpn-modal-actions"><button class="gpn-btn gpn-btn-ghost" id="lkClose">Close</button></div>';
+        GPN.on(GPN.byId('lkClose'), 'click', closeModal);
+        return;
+      }
+
+      var opts = '<option value="">— Select —</option>' + list.map(function (x) {
+        return '<option value="' + esc(x.StudentID) + '">' + esc(x.Name) + ' (' + esc(x.StudentID) + ')</option>';
+      }).join('');
+
+      var html =
+        '<h3 class="gpn-modal-title">Link ' + esc(moduleName) + ' Student</h3>' +
+        '<p class="gpn-modal-sub">Link a ' + esc(module === 'ol' ? 'ol-' : 'hq-') + ' record to <b>' + esc(mpId) + '</b>.</p>' +
+        '<div class="gpn-field"><label class="gpn-label">' + esc(moduleName) + ' Student</label>' +
+          '<select id="lkSubId" class="gpn-select">' + opts + '</select>' +
+        '</div>' +
+        '<div class="gpn-field"><label class="gpn-label">Or type Student ID manually</label>' +
+          '<input id="lkManual" class="gpn-input" placeholder="' + esc(module === 'ol' ? 'ol-arnav042' : 'hq-priya108') + '">' +
+        '</div>' +
+        '<div id="lkError" class="gpn-alert gpn-alert-error" hidden></div>' +
+        '<div class="gpn-modal-actions">' +
+          '<button class="gpn-btn gpn-btn-ghost" id="lkCancel">Cancel</button>' +
+          '<button class="gpn-btn gpn-btn-cyan" id="lkSave">Link</button>' +
+        '</div>';
+
+      GPN.byId('modalGenericCard').innerHTML = html;
+
+      GPN.on(GPN.byId('lkCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('lkSave'), 'click', function () {
+        var err = GPN.byId('lkError'); err.hidden = true;
+        var manual = GPN.byId('lkManual').value.trim();
+        var sel = GPN.byId('lkSubId').value;
+        var subId = manual || sel;
+        if (!subId) { err.textContent = 'Select or type a student ID.'; err.hidden = false; return; }
+
+        var btn = GPN.byId('lkSave');
+        GPN.setLoading(btn, true, 'Linking…');
+        GPN.api('adminMasterLinkStudent', { mpId: mpId, module: module, subId: subId }).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          invalidateCandidates();
+          GPN.Toast.ok('Linked successfully.');
+          closeModal();
+          render('students');
+        });
+      });
+    });
+  }
+
+  function unlinkConfirm(mpId, module) {
+    var moduleName = module === 'ol' ? 'Online' : 'Offline';
+    if (!confirm('Unlink the ' + moduleName + ' student from ' + mpId + '?\n\nThe mp- account will no longer see this side\'s data.')) return;
+
+    GPN.api('adminMasterUnlinkStudent', { mpId: mpId, module: module }).then(function (r) {
+      if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+      invalidateCandidates();
+      GPN.Toast.ok('Unlinked.');
+      closeModal();
+      render('students');
+    });
+  }
+
+  function editMasterModal(id) {
+    GPN.api('adminMasterGetStudent', { id: id }).then(function (j) {
+      if (!j.ok || !j.data || !j.data.student) { GPN.Toast.error('Student not found.'); return; }
+      var s = j.data.student;
+
+      var html =
+        '<h3 class="gpn-modal-title">Edit ' + esc(s.Name) + '</h3>' +
+        '<div class="gpn-field"><label class="gpn-label">Name</label><input id="emName" class="gpn-input" value="' + esc(s.Name) + '"></div>' +
+        '<div class="gpn-grid-2">' +
+          '<div class="gpn-field"><label class="gpn-label">Phone</label><input id="emPhone" class="gpn-input" value="' + esc(s.Phone || '') + '"></div>' +
+          '<div class="gpn-field"><label class="gpn-label">Email</label><input id="emEmail" class="gpn-input" value="' + esc(s.Email || '') + '"></div>' +
+        '</div>' +
+        '<div class="gpn-field"><label class="gpn-label">Class</label>' + classSelect('emClass', s.Class) + '</div>' +
+        '<div class="gpn-field"><label class="gpn-label">School</label><input id="emSchool" class="gpn-input" value="' + esc(s.School || '') + '"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Parent Name</label><input id="emParent" class="gpn-input" value="' + esc(s.ParentName || '') + '"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Status</label>' +
+          '<select id="emStatus" class="gpn-select">' +
+            ['ACTIVE','SUSPENDED','INACTIVE'].map(function (x) {
+              return '<option value="' + x + '"' + (String(s.Status).toUpperCase() === x ? ' selected' : '') + '>' + x + '</option>';
+            }).join('') +
+          '</select></div>' +
+        '<div id="emError" class="gpn-alert gpn-alert-error" hidden></div>' +
+        '<div class="gpn-modal-actions">' +
+          '<button class="gpn-btn gpn-btn-ghost" id="emCancel">Cancel</button>' +
+          '<button class="gpn-btn gpn-btn-cyan" id="emSave">Save</button>' +
+        '</div>';
+
+      openModal(html, function () {
+        GPN.on(GPN.byId('emCancel'), 'click', closeModal);
+        GPN.on(GPN.byId('emSave'), 'click', function () {
+          var err = GPN.byId('emError'); err.hidden = true;
+          var patch = {
+            Name:       GPN.byId('emName').value.trim(),
+            Phone:      GPN.byId('emPhone').value.trim(),
+            Email:      GPN.byId('emEmail').value.trim(),
+            Class:      GPN.byId('emClass').value,
+            School:     GPN.byId('emSchool').value.trim(),
+            ParentName: GPN.byId('emParent').value.trim(),
+            Status:     GPN.byId('emStatus').value
+          };
+          var btn = GPN.byId('emSave');
+          GPN.setLoading(btn, true, 'Saving…');
+          GPN.api('adminMasterUpdateStudent', { id: id, patch: patch }).then(function (r) {
+            GPN.setLoading(btn, false);
+            if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+            GPN.Toast.ok('Saved.');
+            closeModal();
+            render('students');
+          });
+        });
+      });
+    });
+  }
+
+  function resetMasterPasswordModal(id) {
+    var html =
+      '<h3 class="gpn-modal-title">Reset Password</h3>' +
+      '<p class="gpn-modal-sub">Student sessions will be revoked. They will use the new password on next login.</p>' +
+      '<div class="gpn-field"><label class="gpn-label">New Password (min 10)</label><input id="rmNew" class="gpn-input" type="password"></div>' +
+      '<div id="rmError" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="rmCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-danger" id="rmSave">Reset</button>' +
+      '</div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('rmCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('rmSave'), 'click', function () {
+        var err = GPN.byId('rmError');
+        var pw = GPN.byId('rmNew').value;
+        if (pw.length < 10) { err.textContent = 'Min 10 characters.'; err.hidden = false; return; }
+        var btn = GPN.byId('rmSave');
+        GPN.setLoading(btn, true, 'Resetting…');
+        GPN.api('adminMasterResetPassword', { id: id, password: pw }).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Password reset. Sessions revoked: ' + ((r.data && r.data.sessionsRevoked) || 0));
+          closeModal();
+        });
+      });
+    });
+  }
+
+  function deleteMaster(id) {
+    if (!confirm('Delete ' + id + '?\n\nThis soft-deletes the mp- record (Status = DELETED). The linked ol-/hq- records are NOT touched.')) return;
+    GPN.api('adminMasterDeleteStudent', { id: id }).then(function (r) {
+      if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+      invalidateCandidates();
+      GPN.Toast.ok('Master student deleted.');
+      render('students');
+    });
+  }
+
+  VIEWS.upgrade = function () {
+    return loadCandidates(true).then(function (c) {
+      var ol = c.onlineCandidates || [];
+      var hq = c.offlineCandidates || [];
+
+      var html =
+        '<div class="gpn-admin-hero">' +
+          '<h1 class="gpn-admin-hero-title">Upgrade to Master</h1>' +
+          '<p class="gpn-admin-hero-sub">' +
+            'Convert an existing ol- or hq- student into an mp- Master account. ' +
+            'Their original record stays active; the new mp- record inherits the same password and links to it.' +
+          '</p>' +
+        '</div>';
+
+      html +=
+        '<div class="gpn-card"><div class="gpn-card-head">' +
+          '<h3 class="gpn-card-title">Online (ol-) Candidates (' + ol.length + ')</h3>' +
+          '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnRefreshUpgrade">Refresh</button>' +
+        '</div>';
+
+      if (!ol.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No unlinked online students available.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Student ID</th><th>Name</th><th>Class</th><th></th></tr></thead><tbody>';
+        ol.forEach(function (s) {
+          html += '<tr>' +
+            '<td data-label="Student ID" class="gpn-mono">' + esc(s.StudentID) + '</td>' +
+            '<td data-label="Name">' + esc(s.Name) + '</td>' +
+            '<td data-label="Class">' + esc(s.Class || '—') + '</td>' +
+            '<td data-label="Action"><button class="gpn-btn gpn-btn-primary gpn-btn-sm" data-upgrade="' + esc(s.StudentID) + '">Upgrade to Master</button></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+
+      html +=
+        '<div class="gpn-card" style="margin-top:16px;"><div class="gpn-card-head">' +
+          '<h3 class="gpn-card-title">Offline (hq-) Candidates (' + hq.length + ')</h3>' +
+        '</div>';
+
+      if (!hq.length) {
+        html += '<div class="gpn-card-body"><div class="gpn-empty-state">No unlinked offline students available.</div></div>';
+      } else {
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;">' +
+          '<table class="gpn-table"><thead><tr><th>Student ID</th><th>Name</th><th>Class</th><th></th></tr></thead><tbody>';
+        hq.forEach(function (s) {
+          html += '<tr>' +
+            '<td data-label="Student ID" class="gpn-mono">' + esc(s.StudentID) + '</td>' +
+            '<td data-label="Name">' + esc(s.Name) + '</td>' +
+            '<td data-label="Class">' + esc(s.Class || '—') + '</td>' +
+            '<td data-label="Action"><button class="gpn-btn gpn-btn-primary gpn-btn-sm" data-upgrade="' + esc(s.StudentID) + '">Upgrade to Master</button></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnRefreshUpgrade'), 'click', function () {
+        var btn = GPN.byId('btnRefreshUpgrade');
+        GPN.setLoading(btn, true, 'Refreshing…');
+        GPN.api('adminMasterCandidatesForUpgrade').then(function (j) {
+          GPN.setLoading(btn, false);
+          if (!j.ok) { GPN.Toast.error(GPN.friendlyError(j)); return; }
+          invalidateCandidates();
+          GPN.Toast.ok('Refreshed.');
+          render('upgrade');
+        });
+      });
+
+      GPN.$$('button[data-upgrade]').forEach(function (btn) {
+        GPN.on(btn, 'click', function () {
+          confirmUpgrade(btn.dataset.upgrade);
+        });
+      });
+    });
+  };
+
+  function confirmUpgrade(sourceId) {
+    var msg = 'Upgrade ' + sourceId + ' to a Master account?\n\n' +
+      'This will:\n' +
+      '• Create a new mp- account with the same password\n' +
+      '• Link the new mp- to ' + sourceId + '\n' +
+      '• Keep ' + sourceId + ' active and receiving its data\n\n' +
+      'You can add the other side (Online/Offline) link afterward.';
+    if (!confirm(msg)) return;
+
+    GPN.api('adminMasterUpgradeToMaster', { sourceId: sourceId }).then(function (r) {
+      if (!r.ok) {
+        GPN.Toast.error(GPN.friendlyError(r));
+        return;
+      }
+      var d = r.data || {};
+      invalidateCandidates();
+
+      var successHtml =
+        '<h3 class="gpn-modal-title">Upgrade Complete</h3>' +
+        '<p class="gpn-modal-sub">' + esc(d.SourceName || '') + '</p>' +
+        '<div class="gpn-card"><div class="gpn-card-body">' +
+          infoRow('New Master ID', d.StudentID) +
+          infoRow('Linked as', d.OlID ? 'OlID = ' + d.OlID : 'HqID = ' + d.HqID) +
+        '</div></div>' +
+        '<div class="gpn-alert gpn-alert-info" style="margin-top:12px;">' +
+          'The student now logs in with <b>' + esc(d.StudentID) + '</b> using their <b>existing password</b>.<br>' +
+          'If they need the other side (Online/Offline), go to Master Students tab and click Link.' +
+        '</div>' +
+        '<div class="gpn-modal-actions">' +
+          '<button class="gpn-btn gpn-btn-ghost" id="upClose">Close</button>' +
+          '<button class="gpn-btn gpn-btn-cyan" id="upLinkOther">Link Other Side</button>' +
+        '</div>';
+
+      openModal(successHtml, function () {
+        GPN.on(GPN.byId('upClose'), 'click', function () {
+          closeModal();
+          render('upgrade');
+        });
+        GPN.on(GPN.byId('upLinkOther'), 'click', function () {
+          var otherModule = d.OlID ? 'hq' : 'ol';
+          closeModal();
+          linkModal(d.StudentID, otherModule);
+        });
+      });
+    });
+  }
+
+})();
+</script>
+</body>
+</html>

@@ -1,1 +1,66 @@
+# ============================================================================
+# GPN Central System — robots.txt
+# ============================================================================
+# Public pages: estore.html, terms.html, login.html, index.html
+# Private pages: admin*.html, student-*.html, parent.html, print-preview.html
+# ============================================================================
 
+User-agent: *
+Allow: /
+Allow: /index.html
+Allow: /login.html
+Allow: /terms.html
+Allow: /estore.html
+Allow: /shared/
+Allow: /assets/
+Disallow: /admin.html
+Disallow: /admin-online.html
+Disallow: /admin-offline.html
+Disallow: /admin-master.html
+Disallow: /admin-automation.html
+Disallow: /admin-estore.html
+Disallow: /admin-reports.html
+Disallow: /admin-settings.html
+Disallow: /student-online.html
+Disallow: /student-offline.html
+Disallow: /student-master.html
+Disallow: /parent.html
+Disallow: /print-preview.html
+Disallow: /manifest.json
+Disallow: /sw.js
+Disallow: /*?mustChange=
+
+# Aggressive scrapers — block entirely
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+# AI training crawlers — block entirely
+User-agent: GPTBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+# Sitemap — add sitemap.xml later to expose public pages for indexing
+Sitemap: https://repos.guidedpathnoida.in/sitemap.xml

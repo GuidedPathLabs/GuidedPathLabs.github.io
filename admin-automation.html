@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -36,6 +35,7 @@
     <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
     <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
     <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-master.html">Master</a>
     <a class="gpn-navstrip-btn active" href="admin-automation.html">Automation</a>
     <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
     <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
@@ -128,9 +128,6 @@
 
   var VIEWS = {};
 
-  /* ============================================================
-     OVERVIEW
-     ============================================================ */
   VIEWS.overview = function () {
     return GPN.api('adminAutoStats').then(function (j) {
       if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
@@ -199,9 +196,6 @@
     });
   };
 
-  /* ============================================================
-     PDF QUEUE
-     ============================================================ */
   VIEWS.pdf = function () {
     return GPN.api('adminAutoPdfList').then(function (j) {
       if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
@@ -337,9 +331,6 @@
     });
   }
 
-  /* ============================================================
-     SOCIAL QUEUE
-     ============================================================ */
   VIEWS.social = function () {
     return GPN.api('adminAutoSocialList').then(function (j) {
       if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
@@ -485,9 +476,6 @@
     });
   }
 
-  /* ============================================================
-     LOGS
-     ============================================================ */
   VIEWS.logs = function () {
     return GPN.api('adminAutoLogs', { limit: 200 }).then(function (j) {
       if (!j.ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(j)); return; }
@@ -518,6 +506,23 @@
         html += '</tbody></table></div>';
       }
       html += '</div>';
+      viewRoot.innerHTML = html;
+
+      GPN.on(GPN.byId('btnReloadLogs'), 'click', function () { render('logs'); });
+    });
+  };
+
+  function classSelect(id, value) {
+    var opts = (window.GPN_CONFIG.CLASSES || []).map(function (c) {
+      return '<option value="' + esc(c) + '"' + (value === c ? ' selected' : '') + '>' + esc(c) + '</option>';
+    }).join('');
+    return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
+  }
+
+})();
+</script>
+</body>
+</html> '</div>';
       viewRoot.innerHTML = html;
 
       GPN.on(GPN.byId('btnReloadLogs'), 'click', function () { render('logs'); });
