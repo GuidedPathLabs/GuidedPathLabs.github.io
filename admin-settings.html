@@ -1,1 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Settings — GPN Admin</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body>
 
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">Settings</div>
+    </div>
+    <div class="gpn-topbar-user">
+      <span class="gpn-user-badge" id="userBadge">—</span>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnLogout" type="button">Logout</button>
+    </div>
+  </header>
+
+  <nav class="gpn-navstrip">
+    <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
+    <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
+    <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
+    <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
+    <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
+    <a class="gpn-navstrip-btn active" href="admin-settings.html">Settings</a>
+  </nav>
+
+  <main class="gpn-main">
+
+    <section class="gpn-admin-hero">
+      <h1 class="gpn-admin-hero-title">Settings</h1>
+      <p class="gpn-admin-hero-sub">Account and system information.</p>
+    </section>
+
+    <!-- ACCOUNT -->
+    <div class="gpn-card">
+      <div class="gpn-card-head">
+        <h3 class="gpn-card-title">Your Account</h3>
+      </div>
+      <div class="gpn-card-body">
+        <div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">
+          <span class="gpn-quiet">Admin ID</span>
+          <span class="gpn-mono" id="acId">—</span>
+        </div>
+        <div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">
+          <span class="gpn-quiet">Name</span>
+          <span class="gpn-strong" id="acName">—</span>
+        </div>
+        <div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">
+          <span class="gpn-quiet">Role</span>
+          <span id="acRole">—</span>
+        </div>
+        <div class="gpn-row-between" style="padding:8px 0;">
+          <span class="gpn-quiet">Session Expires</span>
+          <span id="acExpires">—</span>
+        </div>
+        <div class="gpn-row" style="margin-top:16px;">
+          <button class="gpn-btn gpn-btn-primary" id="btnChangePw">Change Password</button>
+          <button class="gpn-btn gpn-btn-ghost" id="btnLogout2">Sign Out</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SYSTEM INFO -->
+    <div class="gpn-card">
+      <div class="gpn-card-head">
+        <h3 class="gpn-card-title">System Information</h3>
+      </div>
+      <div class="gpn-card-body">
+        <div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">
+          <span class="gpn-quiet">Application</span>
+          <span class="gpn-strong" id="sysApp">—</span>
+        </div>
+        <div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">
+          <span class="gpn-quiet">Frontend Version</span>
+          <span class="gpn-mono" id="sysVersion">—</span>
+        </div>
+        <div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">
+          <span class="gpn-quiet">Backend Version</span>
+          <span class="gpn-mono" id="sysBackend">—</span>
+        </div>
+        <div class="gpn-row-between" style="padding:8px 0;border-bottom:1px solid var(--border-hair);">
+          <span class="gpn-quiet">Backend Time</span>
+          <span id="sysTime">—</span>
+        </div>
+        <div class="gpn-row-between" style="padding:8px 0;">
+          <span class="gpn-quiet">Website</span>
+          <a class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="sysSite" href="#" target="_blank" rel="noopener">Open</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- BACKUPS -->
+    <div class="gpn-card">
+      <div class="gpn-card-head">
+        <h3 class="gpn-card-title">Backups</h3>
+      </div>
+      <div class="gpn-card-body">
+        <p class="gpn-quiet" style="line-height:1.6;margin-bottom:12px;">
+          A backup of all five databases is created automatically on the 1st of every quarter
+          (Jan · Apr · Jul · Oct) at 3:00 AM IST, into a Drive folder named
+          <b class="gpn-mono">GPN-BACKUPS</b>. Each run produces 5 file copies.
+        </p>
+        <p class="gpn-quiet" style="line-height:1.6;">
+          To run a manual backup right now, open the Apps Script project → Editor →
+          select the function <b class="gpn-mono">createBackups_</b> → Run.
+        </p>
+      </div>
+    </div>
+
+    <!-- ABOUT -->
+    <div class="gpn-card">
+      <div class="gpn-card-head">
+        <h3 class="gpn-card-title">About</h3>
+      </div>
+      <div class="gpn-card-body">
+        <div class="gpn-quiet" style="line-height:1.8;">
+          <div><b style="color:var(--gold);">Guided Path Noida</b></div>
+          <div>आसान पढ़ाई · मजबूत तैयारी · बेहतर परिणाम</div>
+          <div style="margin-top:10px;">
+            <a href="https://guidedpathnoida.in" target="_blank" rel="noopener">guidedpathnoida.in</a>
+            &nbsp;·&nbsp;
+            <a href="https://wa.me/guidedpathnoida" target="_blank" rel="noopener">WhatsApp</a>
+          </div>
+          <div style="margin-top:6px;font-size:0.78rem;">© Guided Path Noida</div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="gpn-footer">
+      <div>Guided Path Noida · Admin Settings</div>
+    </footer>
+
+  </main>
+</div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div class="gpn-modal" id="pwModal" hidden>
+  <div class="gpn-modal-card">
+    <h3 class="gpn-modal-title">Change Password</h3>
+    <p class="gpn-modal-sub">Choose a strong password of at least 10 characters. All your sessions will be revoked and you will sign in again.</p>
+
+    <form id="pwForm" novalidate>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwCurrent">Current Password</label>
+        <input id="pwCurrent" type="password" class="gpn-input" autocomplete="current-password" required>
+      </div>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwNew">New Password</label>
+        <input id="pwNew" type="password" class="gpn-input" autocomplete="new-password" minlength="10" required>
+      </div>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwConfirm">Confirm New Password</label>
+        <input id="pwConfirm" type="password" class="gpn-input" autocomplete="new-password" minlength="10" required>
+      </div>
+
+      <div id="pwAlert" class="gpn-alert gpn-alert-error" hidden></div>
+
+      <div class="gpn-modal-actions">
+        <button type="button" class="gpn-btn gpn-btn-ghost" id="pwCancel">Cancel</button>
+        <button type="submit" class="gpn-btn gpn-btn-cyan" id="pwSubmit">Update Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  if (!GPN.Guard.requireAdmin()) return;
+
+  GPN.ready(function () {
+    GPN.byId('appRoot').hidden = false;
+    GPN.byId('pageLoading').hidden = true;
+
+    /* Fill account info from session */
+    var userId = GPN.Session.getUser() || '—';
+    var name   = GPN.Session.getName() || userId;
+    var role   = GPN.Session.getRole() || '—';
+
+    GPN.byId('acId').textContent   = userId;
+    GPN.byId('acName').textContent = name;
+    GPN.byId('acRole').textContent = role;
+    GPN.byId('userBadge').textContent = name;
+    GPN.byId('userBadge').title = userId;
+
+    /* Fetch 'me' to get session expiry + backend version */
+    GPN.api('auth.me').then(function (j) {
+      if (j && j.ok && j.data) {
+        var u = j.data.user || {};
+        var s = j.data.session || {};
+        if (u.email) GPN.byId('acName').textContent = u.name || u.email || name;
+        if (s.expires_at) GPN.byId('acExpires').textContent = GPN.formatDateTime(s.expires_at);
+      }
+    });
+
+    /* Fetch backend version via ping */
+    GPN.api('ping', null, { skipToken: true }).then(function (j) {
+      if (j && j.ok && j.data) {
+        GPN.byId('sysBackend').textContent = j.data.version || '—';
+        GPN.byId('sysTime').textContent = GPN.formatDateTime(j.data.time) || '—';
+      }
+    });
+
+    /* System info from config */
+    GPN.byId('sysApp').textContent     = GPN.cfg('APP_NAME', '—');
+    GPN.byId('sysVersion').textContent = GPN.cfg('VERSION', '—');
+    GPN.byId('sysSite').href           = GPN.cfg('WEBSITE', '#');
+
+    /* Logout (both buttons) */
+    function confirmLogout() {
+      if (confirm('Sign out of GPN Central?')) GPN.Guard.logout();
+    }
+    GPN.on(GPN.byId('btnLogout'), 'click', confirmLogout);
+    GPN.on(GPN.byId('btnLogout2'), 'click', confirmLogout);
+
+    /* Change password modal */
+    GPN.Modal.wire('pwModal');
+
+    GPN.on(GPN.byId('btnChangePw'), 'click', function () {
+      GPN.byId('pwAlert').hidden = true;
+      GPN.byId('pwForm').reset();
+      GPN.Modal.open('pwModal');
+    });
+
+    GPN.on(GPN.byId('pwCancel'), 'click', function () { GPN.Modal.close('pwModal'); });
+
+    GPN.on(GPN.byId('pwForm'), 'submit', function (e) {
+      e.preventDefault();
+      handleChangePassword();
+    });
+  });
+
+  function handleChangePassword() {
+    var alertBox = GPN.byId('pwAlert');
+    var btn      = GPN.byId('pwSubmit');
+    alertBox.hidden = true;
+
+    var current = GPN.byId('pwCurrent').value;
+    var next    = GPN.byId('pwNew').value;
+    var confirm = GPN.byId('pwConfirm').value;
+
+    if (!current || !next || !confirm) { showError('Please fill in all fields.'); return; }
+    if (next.length < 10)              { showError('New password must be at least 10 characters.'); return; }
+    if (next !== confirm)              { showError('New password and confirmation do not match.'); return; }
+    if (next === current)              { showError('New password must differ from current.'); return; }
+
+    GPN.setLoading(btn, true, 'Updating…');
+
+    GPN.api('auth.changePassword', {
+      currentPassword: current,
+      newPassword:     next
+    }).then(function (json) {
+      GPN.setLoading(btn, false);
+
+      if (!json || !json.ok) {
+        showError(GPN.friendlyError(json));
+        return;
+      }
+
+      /* New token issued by backend */
+      GPN.Session.save(json.data || {});
+      GPN.Toast.ok('Password updated. Please sign in again.');
+      GPN.Modal.close('pwModal');
+
+      setTimeout(function () {
+        GPN.Session.clear();
+        window.location.href = 'login.html';
+      }, 1400);
+    });
+  }
+
+  function showError(msg) {
+    var el = GPN.byId('pwAlert');
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+})();
+</script>
+</body>
+</html>
