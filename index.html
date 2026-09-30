@@ -1,10 +1,118 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Guided Path Labs Root Page</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Guided Path Noida</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
 </head>
-<body>
-  <h1 align="center">Guided Path Labs</h1>
+<body class="gpn-login-shell">
+
+  <!-- ============================================================
+       CENTERED LOADING CARD
+       ============================================================ -->
+  <main class="gpn-login-card" style="text-align: center;">
+
+    <div class="gpn-login-brand">
+      <div class="gpn-login-logo">GPN</div>
+      <h1 class="gpn-login-title">Guided Path Noida</h1>
+      <p class="gpn-login-sub">Central System</p>
+    </div>
+
+    <div class="gpn-login-divider"></div>
+
+    <p style="font-size: 0.85rem; color: var(--tx-muted);">
+      <span class="gpn-spinner"></span>
+      Redirecting…
+    </p>
+
+    <noscript>
+      <div class="gpn-alert gpn-alert-warn" style="margin-top: 16px;">
+        JavaScript is required. Please enable it and reload.
+      </div>
+    </noscript>
+
+    <div id="fallbackLinks" style="margin-top: 20px;" hidden>
+      <a href="login.html" class="gpn-btn gpn-btn-primary gpn-btn-block" style="margin-bottom: 8px;">
+        Sign In
+      </a>
+      <a href="estore.html" class="gpn-btn gpn-btn-cyan gpn-btn-block">
+        Visit Store
+      </a>
+    </div>
+
+  </main>
+
+  <!-- ============================================================
+       SCRIPTS
+       ============================================================ -->
+  <script src="shared/config.js?v=1.0.0"></script>
+  <script src="shared/gpn.js?v=1.0.0"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      GPN.ready(function () {
+
+        /* ----------------------------------------------------------
+         * 1. Honour an optional ?to= param for direct deep links.
+         *    Allowed destinations only — no open redirect.
+         * -------------------------------------------------------- */
+        var q = GPN.query();
+        var to = String((q && q.to) || '').toLowerCase().trim();
+
+        var DEEP_LINKS = {
+          'store':    'estore.html',
+          'estore':   'estore.html',
+          'terms':    'terms.html',
+          'login':    'login.html',
+          'admin':    'admin.html'
+        };
+
+        /* Public deep links — work even when logged out */
+        var PUBLIC_LINKS = ['estore.html', 'terms.html', 'login.html'];
+
+        if (to && DEEP_LINKS[to]) {
+          var dest = DEEP_LINKS[to];
+          /* Admin link needs auth check */
+          if (dest === 'admin.html' && !GPN.Session.isLoggedIn()) {
+            window.location.replace('login.html?role=admin');
+            return;
+          }
+          window.location.replace(dest);
+          return;
+        }
+
+        /* ----------------------------------------------------------
+         * 2. Session-based routing
+         * -------------------------------------------------------- */
+        if (GPN.Session.isLoggedIn()) {
+          var landing = GPN.Session.landingPage();
+          window.location.replace(landing);
+          return;
+        }
+
+        /* ----------------------------------------------------------
+         * 3. Not logged in → login page
+         * -------------------------------------------------------- */
+        window.location.replace('login.html');
+
+        /* ----------------------------------------------------------
+         * 4. Fallback — if redirect hasn't happened in 3 seconds,
+         *    show manual links in case something went wrong.
+         * -------------------------------------------------------- */
+        setTimeout(function () {
+          var fb = document.getElementById('fallbackLinks');
+          if (fb) fb.hidden = false;
+        }, 3000);
+      });
+
+    })();
+  </script>
 </body>
 </html>
