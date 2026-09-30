@@ -1,1 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Sign In — Guided Path Noida</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body class="gpn-login-shell">
 
+  <!-- ============================================================
+       LOGIN CARD
+       ============================================================ -->
+  <main class="gpn-login-card" id="loginCard">
+
+    <!-- Brand -->
+    <div class="gpn-login-brand">
+      <div class="gpn-login-logo">GPN</div>
+      <h1 class="gpn-login-title">Guided Path Noida</h1>
+      <p class="gpn-login-sub" id="modeSubtitle">Student Sign In</p>
+    </div>
+
+    <div class="gpn-login-divider"></div>
+
+    <!-- Form -->
+    <form id="loginForm" autocomplete="on" novalidate>
+
+      <div class="gpn-field">
+        <label class="gpn-label" for="loginId" id="loginIdLabel">Student ID</label>
+        <input
+          id="loginId"
+          class="gpn-input"
+          type="text"
+          inputmode="text"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          autocomplete="username"
+          placeholder="e.g. ol-arnav042 / hq-priya108"
+          required
+        >
+      </div>
+
+      <div class="gpn-field">
+        <label class="gpn-label" for="password">Password</label>
+        <input
+          id="password"
+          class="gpn-input"
+          type="password"
+          autocomplete="current-password"
+          placeholder="Enter your password"
+          minlength="10"
+          required
+        >
+      </div>
+
+      <!-- Inline alert -->
+      <div id="loginError" class="gpn-alert gpn-alert-error" role="alert" hidden></div>
+
+      <!-- Submit -->
+      <button
+        type="submit"
+        id="loginBtn"
+        class="gpn-btn gpn-btn-primary gpn-btn-block gpn-btn-lg"
+        style="margin-top: 20px;"
+      >
+        Sign In →
+      </button>
+
+    </form>
+
+    <!-- Mode switch link -->
+    <div class="gpn-login-foot">
+      <a href="#" id="modeSwitch">Admin Login →</a>
+    </div>
+
+    <div class="gpn-login-foot" style="margin-top: 8px; font-size: 0.68rem; letter-spacing: 0.5px;">
+      Trouble signing in? <a href="https://wa.me/guidedpathnoida" target="_blank" rel="noopener">Contact us on WhatsApp</a>
+    </div>
+
+  </main>
+
+  <!-- ============================================================
+       SCRIPTS
+       ============================================================ -->
+  <script src="shared/config.js?v=1.0.0"></script>
+  <script src="shared/gpn.js?v=1.0.0"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      /* ----------------------------------------------------------
+       * Redirect already-authenticated users
+       * -------------------------------------------------------- */
+      GPN.ready(function () {
+        if (GPN.Guard.redirectIfLoggedIn()) return;
+
+        var form         = GPN.byId('loginForm');
+        var idInput      = GPN.byId('loginId');
+        var pwInput      = GPN.byId('password');
+        var btn          = GPN.byId('loginBtn');
+        var errBox       = GPN.byId('loginError');
+        var idLabel      = GPN.byId('loginIdLabel');
+        var modeSubtitle = GPN.byId('modeSubtitle');
+        var modeSwitch   = GPN.byId('modeSwitch');
+
+        var currentRole = 'STUDENT'; // 'STUDENT' | 'ADMIN'
+
+        function showError(msg) {
+          errBox.textContent = msg;
+          errBox.hidden = false;
+        }
+
+        function clearError() {
+          errBox.hidden = true;
+          errBox.textContent = '';
+        }
+
+        function applyMode(role) {
+          currentRole = role;
+          if (role === 'ADMIN') {
+            modeSubtitle.textContent = 'Administrator Access';
+            idLabel.textContent      = 'Admin ID';
+            idInput.placeholder      = 'Enter your admin ID';
+            idInput.setAttribute('autocomplete', 'username');
+            modeSwitch.textContent   = '← Student Login';
+            document.title           = 'Admin Sign In — GPN';
+          } else {
+            modeSubtitle.textContent = 'Student Sign In';
+            idLabel.textContent      = 'Student ID';
+            idInput.placeholder      = 'e.g. ol-arnav042 / hq-priya108';
+            idInput.setAttribute('autocomplete', 'username');
+            modeSwitch.textContent   = 'Admin Login →';
+            document.title           = 'Sign In — Guided Path Noida';
+          }
+          clearError();
+          idInput.value = '';
+          pwInput.value = '';
+          idInput.focus();
+        }
+
+        /* ----------------------------------------------------------
+         * Mode switch link
+         * -------------------------------------------------------- */
+        GPN.on(modeSwitch, 'click', function (e) {
+          e.preventDefault();
+          applyMode(currentRole === 'ADMIN' ? 'STUDENT' : 'ADMIN');
+        });
+
+        /* ----------------------------------------------------------
+         * Submit
+         * -------------------------------------------------------- */
+        GPN.on(form, 'submit', function (e) {
+          e.preventDefault();
+          clearError();
+
+          var loginId  = idInput.value.trim();
+          var password = pwInput.value;
+
+          if (!loginId) {
+            showError('Please enter your ID.');
+            idInput.focus();
+            return;
+          }
+          if (!password) {
+            showError('Please enter your password.');
+            pwInput.focus();
+            return;
+          }
+          if (password.length < 6) {
+            showError('Password must be at least 6 characters.');
+            pwInput.focus();
+            return;
+          }
+
+          GPN.setLoading(btn, true, 'Signing in…');
+
+          GPN.api('auth.login', {
+            loginId:  loginId,
+            password: password,
+            role:     currentRole
+          }).then(function (json) {
+            GPN.setLoading(btn, false);
+
+            if (!json || !json.ok) {
+              showError(GPN.friendlyError(json));
+              pwInput.value = '';
+              pwInput.focus();
+              return;
+            }
+
+            /* Save session */
+            GPN.Session.save(json.data || {});
+
+            GPN.Toast.ok('Welcome, ' + (json.data.name || json.data.userId || loginId));
+
+            /* Route to landing page based on role + module */
+            var dest = GPN.Session.landingPage();
+            setTimeout(function () {
+              window.location.href = dest;
+            }, 400);
+
+          }).catch(function (err) {
+            GPN.setLoading(btn, false);
+            console.error('Login error:', err);
+            showError('Something went wrong. Please try again.');
+          });
+        });
+
+        /* ----------------------------------------------------------
+         * Enter on password field triggers submit
+         * -------------------------------------------------------- */
+        GPN.on(pwInput, 'keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            form.dispatchEvent(new Event('submit', { cancelable: true }));
+          }
+        });
+
+        /* ----------------------------------------------------------
+         * URL hint: ?role=admin pre-selects admin mode
+         * -------------------------------------------------------- */
+        var q = GPN.query();
+        if (q && String(q.role || '').toLowerCase() === 'admin') {
+          applyMode('ADMIN');
+        } else {
+          idInput.focus();
+        }
+      });
+
+    })();
+  </script>
+</body>
+</html>ord: pw, role: currentRole });
+
+  btn.disabled = false;
+  btn.textContent = old;
+
+  if (!res || !res.ok) {
+    var msg = (res && res.error) || 'Sign-in failed.';
+    if (res && res.code === 'INVALID_CREDENTIALS') msg = 'Invalid ID or password.';
+    if (res && res.code === 'ACCOUNT_INACTIVE') msg = 'Your account is inactive. Contact your teacher.';
+    return showError(msg);
+  }
+
+  var d = res.data || {};
+  localStorage.setItem(K_TOKEN, d.token || '');
+  localStorage.setItem(K_ROLE,  String(d.role || currentRole).toUpperCase());
+  localStorage.setItem(K_USER,  d.userId || lid);
+  localStorage.setItem(K_NAME,  d.name || '');
+
+  toast('Welcome, ' + (d.name || d.userId) + '.', 'ok');
+
+  setTimeout(function () {
+    window.location.href = (String(d.role).toUpperCase() === 'ADMIN') ? 'admin.html' : 'student.html';
+  }, 400);
+});
+
+window.addEventListener('load', function () {
+  var t = localStorage.getItem(K_TOKEN);
+  var r = localStorage.getItem(K_ROLE);
+  if (t && r) {
+    already.textContent = 'You are already signed in as ' + (localStorage.getItem(K_NAME) || localStorage.getItem(K_USER) || '') + '. Redirecting…';
+    already.classList.add('show');
+    setTimeout(function () {
+      window.location.href = (r === 'ADMIN') ? 'admin.html' : 'student.html';
+    }, 900);
+    return;
+  }
+  document.getElementById('loginId').focus();
+});
+</script>
+</body>
+</html>n></span>
+      </button>
+
+    </form>
+
+    <p class="gpn-help">
+      Forgot your password? Contact your teacher.<br>
+      Accounts are created by the <strong>administrator</strong>.
+    </p>
+
+  </main>
+
+  <footer class="gpn-footer">
+    <span>Guided Path Noida</span>
+    <span class="dot">·</span>
+    <span>v2.4.1</span>
+  </footer>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   GUIDED PATH — LOGIN SCRIPT
+   1  CONFIG
+   2  DOM HELPERS
+   3  ROLE SWITCH
+   4  FORM SUBMIT
+   5  BOOT
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 1  CONFIG */
+var CONFIG = {
+  API_URL: 'https://script.google.com/macros/s/AKfycbx0dOo1ovROMdFYedx4Gm3a1tmpZjjXEwqcxLjCzWXC3Tgxupo9Mc3obk5zDS3uat_7/exec',
+  TOKEN_KEY: 'gp_token',
+  ROLE_KEY:  'gp_role',
+  USER_KEY:  'gp_user'
+};
+
+/* 2  DOM HELPERS */
+function el(id){ return document.getElementById(id); }
+
+function showAlert(message, kind){
+  var box = el('loginAlert');
+  box.className = 'gpn-alert ' + (kind || 'error');
+  box.textContent = message;
+}
+function clearAlert(){
+  var box = el('loginAlert');
+  box.className = 'gpn-alert';
+  box.textContent = '';
+}
+function setLoading(on){
+  var btn = el('loginBtn');
+  var lbl = btn.querySelector('.btn-label');
+  var spn = btn.querySelector('.btn-spinner');
+  if (on){
+    btn.disabled = true;
+    lbl.textContent = 'Signing in…';
+    spn.hidden = false;
+  } else {
+    btn.disabled = false;
+    lbl.textContent = 'Sign In';
+    spn.hidden = true;
+  }
+}
+
+/* 3  ROLE SWITCH */
+var currentRole = 'STUDENT';
+var roleBtns = document.querySelectorAll('.gpn-role-btn');
+
+function setRole(role){
+  currentRole = role;
+  for (var i = 0; i < roleBtns.length; i++){
+    var b = roleBtns[i];
+    var active = b.getAttribute('data-role') === role;
+    b.classList.toggle('is-active', active);
+    b.setAttribute('aria-selected', active ? 'true' : 'false');
+  }
+  var label = el('loginIdLabel');
+  var input = el('loginId');
+  if (role === 'ADMIN'){
+    label.textContent = 'Admin ID';
+    input.placeholder = 'ADM-0001';
+  } else {
+    label.textContent = 'Student ID';
+    input.placeholder = 'STU-0001';
+  }
+  clearAlert();
+}
+
+for (var i = 0; i < roleBtns.length; i++){
+  (function(btn){
+    btn.addEventListener('click', function(){
+      setRole(btn.getAttribute('data-role'));
+      el('loginId').focus();
+    });
+  })(roleBtns[i]);
+}
+
+/* 4  FORM SUBMIT */
+el('pwToggle').addEventListener('click', function(){
+  var pw  = el('password');
+  var btn = el('pwToggle');
+  if (pw.type === 'password'){ pw.type = 'text';     btn.textContent = 'Hide'; }
+  else                       { pw.type = 'password'; btn.textContent = 'Show'; }
+});
+
+el('loginForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  clearAlert();
+
+  var loginId  = el('loginId').value.trim().toUpperCase();
+  var password = el('password').value;
+
+  if (!loginId || !password){
+    showAlert('Please enter both ID and password.', 'error');
+    return;
+  }
+  if (CONFIG.API_URL.indexOf('PASTE_') === 0){
+    showAlert('Backend URL is not configured in this build.', 'error');
+    return;
+  }
+
+  setLoading(true);
+
+  var payload = {
+    action:  'login',
+    token:   '',
+    payload: {
+      loginId:  loginId,
+      password: password,
+      role:     currentRole
+    }
+  };
+
+  fetch(CONFIG.API_URL, {
+    method:  'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body:    JSON.stringify(payload),
+    redirect:'follow'
+  })
+  .then(function(res){ return res.json(); })
+  .then(function(data){
+    setLoading(false);
+
+    if (!data || !data.ok){
+      var msg  = (data && data.error) || 'Login failed.';
+      var code = (data && data.code) || '';
+      if (code === 'INVALID_CREDENTIALS') msg = 'Invalid ID or password.';
+      else if (code === 'ACCOUNT_INACTIVE') msg = msg + ' Please contact your teacher.';
+      else if (code === 'INVALID_ROLE')     msg = 'Please choose Student or Admin.';
+      else if (code === 'SERVER_BUSY')      msg = 'Server is busy. Please try again in a moment.';
+      showAlert(msg, 'error');
+      return;
+    }
+
+    try {
+      localStorage.setItem(CONFIG.TOKEN_KEY, data.data.token);
+      localStorage.setItem(CONFIG.ROLE_KEY,  data.data.role);
+      localStorage.setItem(CONFIG.USER_KEY,  JSON.stringify({
+        id:   data.data.userId,
+        name: data.data.name || ''
+      }));
+    } catch (err){
+      showAlert('Could not save your session in this browser.', 'error');
+      return;
+    }
+
+    showAlert('Signed in. Redirecting…', 'info');
+
+    if (data.data.role === 'ADMIN'){
+      window.location.href = 'admin.html';
+    } else {
+      window.location.href = 'student.html';
+    }
+  })
+  .catch(function(err){
+    setLoading(false);
+    showAlert('Network error. Please check your connection and try again.', 'error');
+  });
+});
+
+/* Enter from ID field moves to password */
+el('loginId').addEventListener('keydown', function(e){
+  if (e.key === 'Enter'){ e.preventDefault(); el('password').focus(); }
+});
+
+/* 5  BOOT */
+(function boot(){
+  /* If an unexpired session already exists, skip the login screen. */
+  var token = localStorage.getItem(CONFIG.TOKEN_KEY);
+  var role  = localStorage.getItem(CONFIG.ROLE_KEY);
+  if (token && (role === 'ADMIN' || role === 'STUDENT')){
+    window.location.href = role === 'ADMIN' ? 'admin.html' : 'student.html';
+    return;
+  }
+  el('loginId').focus();
+})();
+</script>
+</body>
+</html>
