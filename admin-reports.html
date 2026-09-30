@@ -1,1 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Reports — GPN Admin</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body>
 
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">Reports <b>&amp; Export</b></div>
+    </div>
+    <div class="gpn-topbar-user">
+      <span class="gpn-user-badge" id="userBadge">—</span>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnLogout" type="button">Logout</button>
+    </div>
+  </header>
+
+  <nav class="gpn-navstrip">
+    <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
+    <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
+    <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
+    <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
+    <a class="gpn-navstrip-btn active" href="admin-reports.html">Reports</a>
+    <a class="gpn-navstrip-btn" href="admin-settings.html">Settings</a>
+  </nav>
+
+  <main class="gpn-main">
+
+    <section class="gpn-admin-hero">
+      <h1 class="gpn-admin-hero-title">Export Center</h1>
+      <p class="gpn-admin-hero-sub">Generate print-ready records or download CSV. Print → Save as PDF works on any device.</p>
+    </section>
+
+    <!-- Controls -->
+    <div class="gpn-card">
+      <div class="gpn-card-head">
+        <h3 class="gpn-card-title">Configure Report</h3>
+      </div>
+      <div class="gpn-card-body">
+        <div class="gpn-grid-2">
+          <div class="gpn-field">
+            <label class="gpn-label" for="rpModule">Module</label>
+            <select id="rpModule" class="gpn-select">
+              <option value="online">Online</option>
+              <option value="offline">Offline</option>
+            </select>
+          </div>
+          <div class="gpn-field">
+            <label class="gpn-label" for="rpType">Report Type</label>
+            <select id="rpType" class="gpn-select">
+              <option value="">— Select —</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="rpFilters" class="gpn-grid-2" style="margin-top:12px;"></div>
+
+        <div class="gpn-row" style="margin-top:16px;">
+          <button class="gpn-btn gpn-btn-primary" id="rpPreview">Preview &amp; Print</button>
+          <button class="gpn-btn gpn-btn-cyan" id="rpCsv">Download CSV</button>
+        </div>
+
+        <div id="rpAlert" class="gpn-alert gpn-alert-error" hidden style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <!-- Result preview (short summary before print) -->
+    <div class="gpn-card" id="rpSummary" hidden>
+      <div class="gpn-card-head">
+        <h3 class="gpn-card-title">Preview</h3>
+      </div>
+      <div class="gpn-card-body" id="rpSummaryBody"></div>
+    </div>
+
+    <footer class="gpn-footer">
+      <div>Guided Path Noida · Reports</div>
+    </footer>
+
+  </main>
+</div>
+
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  if (!GPN.Guard.requireAdmin()) return;
+
+  GPN.ready(function () {
+    GPN.byId('userBadge').textContent = GPN.Session.getName() || 'Admin';
+    GPN.byId('userBadge').title = GPN.Session.getUser() || '';
+
+    GPN.on(GPN.byId('btnLogout'), 'click', function () {
+      if (confirm('Sign out?')) GPN.Guard.logout();
+    });
+
+    /* Wire module switch */
+    GPN.on(GPN.byId('rpModule'), 'change', populateTypes);
+
+    /* Wire action buttons */
+    GPN.on(GPN.byId('rpPreview'), 'click', function () { run('preview'); });
+    GPN.on(GPN.byId('rpCsv'), 'click', function () { run('csv'); });
+
+    GPN.byId('appRoot').hidden = false;
+    GPN.byId('pageLoading').hidden = true;
+
+    populateTypes();
+  });
+
+  /* ============================================================
+     REPORT DEFINITIONS
+     ============================================================ */
+  var REPORT_DEFS = {
+    online: [
+      { value: 'students-list',    label: 'All Students List',           filters: ['search'] },
+      { value: 'student-full',     label: 'Single Student — Full Record', filters: ['student'] },
+      { value: 'student-results',  label: 'Single Student — Test Results', filters: ['student'] },
+      { value: 'student-wallet',   label: 'Single Student — Wallet Ledger', filters: ['student'] },
+      { value: 'class-roster',     label: 'Class Roster',                 filters: ['class'] },
+      { value: 'programme-list',   label: 'All Programmes',               filters: [] },
+      { value: 'tests-list',       label: 'All Tests',                    filters: [] },
+      { value: 'payments-list',    label: 'All Payments',                 filters: [] }
+    ],
+    offline: [
+      { value: 'students-list',    label: 'All Students List',           filters: ['search'] },
+      { value: 'student-full',     label: 'Single Student — Full Record', filters: ['student'] },
+      { value: 'student-fees',     label: 'Single Student — Fee Ledger',  filters: ['student'] },
+      { value: 'student-attendance', label: 'Single Student — Attendance', filters: ['student', 'month'] },
+      { value: 'student-tests',    label: 'Single Student — Test Scores', filters: ['student'] },
+      { value: 'class-roster',     label: 'Class Roster',                 filters: ['class'] },
+      { value: 'batch-roster',     label: 'Batch Roster',                 filters: ['batch'] },
+      { value: 'fees-summary',     label: 'Fees Summary (Monthly)',       filters: [] },
+      { value: 'leaderboard',      label: 'Leaderboard Snapshot',         filters: [] }
+    ]
+  };
+
+  /* ============================================================
+     TYPE POPULATION
+     ============================================================ */
+  function populateTypes() {
+    var mod = GPN.byId('rpModule').value;
+    var defs = REPORT_DEFS[mod] || [];
+    var sel = GPN.byId('rpType');
+    sel.innerHTML = '<option value="">— Select Report —</option>' +
+      defs.map(function (d) { return '<option value="' + d.value + '">' + d.label + '</option>'; }).join('');
+    GPN.byId('rpFilters').innerHTML = '';
+    GPN.byId('rpSummary').hidden = true;
+    clearAlert();
+
+    GPN.on(sel, 'change', function () {
+      var cur = defs.filter(function (d) { return d.value === sel.value; })[0];
+      renderFilters(cur ? cur.filters : []);
+    });
+  }
+
+  function renderFilters(requiredFilters) {
+    var wrap = GPN.byId('rpFilters');
+    wrap.innerHTML = '';
+    clearAlert();
+
+    var promises = [];
+
+    requiredFilters.forEach(function (f) {
+      if (f === 'search') {
+        wrap.appendChild(makeInput('rpSearch', 'Search (name or ID)', 'text'));
+      } else if (f === 'class') {
+        var sel = document.createElement('select');
+        sel.id = 'rpClass';
+        sel.className = 'gpn-select';
+        var label = document.createElement('label');
+        label.className = 'gpn-label';
+        label.textContent = 'Class';
+        var fg = document.createElement('div');
+        fg.className = 'gpn-field';
+        fg.appendChild(label); fg.appendChild(sel);
+        sel.innerHTML = '<option value="">— Select Class —</option>' +
+          (window.GPN_CONFIG.CLASSES || []).map(function (c) { return '<option value="' + GPN.esc(c) + '">' + GPN.esc(c) + '</option>'; }).join('');
+        wrap.appendChild(fg);
+      } else if (f === 'month') {
+        var mEl = makeInput('rpMonth', 'Month (YYYY-MM)', 'month');
+        mEl.value = GPN.todayISO().substring(0, 7);
+        wrap.appendChild(mEl);
+      } else if (f === 'student') {
+        var sFg = document.createElement('div');
+        sFg.className = 'gpn-field gpn-field-full';
+        var sL = document.createElement('label');
+        sL.className = 'gpn-label'; sL.textContent = 'Student';
+        var sSel = document.createElement('select');
+        sSel.id = 'rpStudent';
+        sSel.className = 'gpn-select';
+        sSel.innerHTML = '<option value="">Loading…</option>';
+        sFg.appendChild(sL); sFg.appendChild(sSel);
+        wrap.appendChild(sFg);
+        promises.push(loadStudentOptions(sSel));
+      } else if (f === 'batch') {
+        var bFg = document.createElement('div');
+        bFg.className = 'gpn-field';
+        var bL = document.createElement('label');
+        bL.className = 'gpn-label'; bL.textContent = 'Batch';
+        var bSel = document.createElement('select');
+        bSel.id = 'rpBatch';
+        bSel.className = 'gpn-select';
+        bSel.innerHTML = '<option value="">Loading…</option>';
+        bFg.appendChild(bL); bFg.appendChild(bSel);
+        wrap.appendChild(bFg);
+        promises.push(loadBatchOptions(bSel));
+      }
+    });
+
+    return Promise.all(promises);
+  }
+
+  function makeInput(id, labelText, type) {
+    var fg = document.createElement('div');
+    fg.className = 'gpn-field';
+    var l = document.createElement('label');
+    l.className = 'gpn-label'; l.textContent = labelText;
+    var inp = document.createElement('input');
+    inp.id = id; inp.className = 'gpn-input'; inp.type = type || 'text';
+    fg.appendChild(l); fg.appendChild(inp);
+    return fg;
+  }
+
+  function loadStudentOptions(sel) {
+    var mod = GPN.byId('rpModule').value;
+    var route = mod === 'online' ? 'adminListStudents' : 'adminOfflineListStudents';
+    return GPN.api(route).then(function (j) {
+      if (!j.ok) { sel.innerHTML = '<option value="">Failed to load</option>'; return; }
+      var students = (j.data && j.data.students) || [];
+      sel.innerHTML = '<option value="">— Select Student —</option>' +
+        students.map(function (s) {
+          return '<option value="' + GPN.esc(s.StudentID) + '">' + GPN.esc(s.Name) + ' (' + GPN.esc(s.StudentID) + ')</option>';
+        }).join('');
+    });
+  }
+
+  function loadBatchOptions(sel) {
+    return GPN.api('adminOfflineListBatches').then(function (j) {
+      if (!j.ok) { sel.innerHTML = '<option value="">Failed to load</option>'; return; }
+      var batches = (j.data && j.data.batches) || [];
+      sel.innerHTML = '<option value="">— Select Batch —</option>' +
+        batches.map(function (b) {
+          return '<option value="' + GPN.esc(b.BatchID) + '">' + GPN.esc(b.BatchName) + '</option>';
+        }).join('');
+    });
+  }
+
+  /* ============================================================
+     RUN — orchestrates fetch → build → output
+     ============================================================ */
+  function run(mode) {
+    clearAlert();
+    var mod = GPN.byId('rpModule').value;
+    var type = GPN.byId('rpType').value;
+    if (!type) { showAlert('Please select a report type.'); return; }
+
+    GPN.showContainerLoading(GPN.byId('rpSummaryBody'), 'Preparing…');
+    GPN.byId('rpSummary').hidden = false;
+
+    var builder = BUILDERS[mod] && BUILDERS[mod][type];
+    if (!builder) { showAlert('Report not available.'); return; }
+
+    builder().then(function (result) {
+      if (!result || !result.ok) {
+        GPN.showContainerError(GPN.byId('rpSummaryBody'), (result && result.error) || 'Failed to prepare report.');
+        return;
+      }
+
+      var title = result.title || type;
+      var headers = result.headers || [];
+      var rows = result.rows || [];
+
+      if (!rows.length) {
+        GPN.showContainerEmpty(GPN.byId('rpSummaryBody'), 'No data for this report.');
+        return;
+      }
+
+      /* Render preview summary */
+      GPN.byId('rpSummaryBody').innerHTML =
+        '<div class="gpn-quiet" style="margin-bottom:8px;">' + rows.length + ' row(s) · ' + headers.length + ' column(s)</div>' +
+        '<div class="gpn-table-wrap" style="max-height:50dvh;overflow:auto;">' +
+          '<table class="gpn-table"><thead><tr>' +
+            headers.map(function (h) { return '<th>' + GPN.esc(h) + '</th>'; }).join('') +
+          '</tr></thead><tbody>' +
+            rows.slice(0, 30).map(function (r) {
+              return '<tr>' + r.map(function (c) { return '<td>' + GPN.esc(c) + '</td>'; }).join('') + '</tr>';
+            }).join('') +
+          '</tbody></table>' +
+        '</div>' +
+        (rows.length > 30 ? '<div class="gpn-quiet" style="margin-top:8px;">Showing first 30 of ' + rows.length + ' rows. Full data is used for export.</div>' : '');
+
+      /* Act */
+      if (mode === 'csv') {
+        var csv = buildCSVString(headers, rows);
+        GPN.Export.downloadCSV(csv, sanitizeFilename(title) + '-' + GPN.todayISO() + '.csv');
+        GPN.Toast.ok('CSV downloaded.');
+      } else {
+        var html = buildPrintDocument(title, headers, rows, result.meta);
+        GPN.Export.printHTML(html, title);
+      }
+    }).catch(function (err) {
+      console.error(err);
+      GPN.showContainerError(GPN.byId('rpSummaryBody'), 'Report generation failed.');
+    });
+  }
+
+  function clearAlert() { GPN.byId('rpAlert').hidden = true; }
+  function showAlert(msg) {
+    var el = GPN.byId('rpAlert');
+    el.textContent = msg; el.hidden = false;
+  }
+
+  /* ============================================================
+     OUTPUT BUILDERS
+     ============================================================ */
+  function buildCSVString(headers, rows) {
+    var out = [];
+    out.push(headers.map(csvCell).join(','));
+    rows.forEach(function (r) { out.push(r.map(csvCell).join(',')); });
+    return out.join('\r\n');
+  }
+
+  function csvCell(v) {
+    var s = String(v == null ? '' : v);
+    if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function buildPrintDocument(title, headers, rows, meta) {
+    meta = meta || {};
+    var h = '<!DOCTYPE html><html><head><meta charset="UTF-8">';
+    h += '<title>' + GPN.esc(title) + '</title>';
+    h += '<style>';
+    h += 'body{font-family:"Times New Roman",Georgia,serif;background:#fff;color:#000;padding:20px;margin:0;}';
+    h += 'header{text-align:center;border-bottom:2px solid #0a192f;padding-bottom:10px;margin-bottom:16px;}';
+    h += 'header .brand{font-size:20px;font-weight:700;letter-spacing:1px;color:#0a192f;}';
+    h += 'header .sub{font-size:12px;color:#333;margin-top:2px;}';
+    h += 'header .report{margin-top:10px;font-size:14px;font-weight:700;color:#0a192f;}';
+    h += 'header .meta{font-size:11px;color:#555;margin-top:4px;}';
+    h += 'table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;}';
+    h += 'th,td{border:1px solid #999;padding:5px 7px;text-align:left;vertical-align:top;}';
+    h += 'th{background:#eee;font-weight:700;}';
+    h += 'tr:nth-child(even) td{background:#fafafa;}';
+    h += 'footer{margin-top:20px;font-size:10px;color:#666;text-align:center;border-top:1px solid #ccc;padding-top:8px;}';
+    h += '@media print{body{padding:0;}@page{margin:15mm;}tr{page-break-inside:avoid;}}';
+    h += '</style></head><body>';
+
+    h += '<header>';
+    h += '<div class="brand">' + GPN.esc(window.GPN_CONFIG.APP_NAME || 'Guided Path Noida') + '</div>';
+    h += '<div class="sub">' + GPN.esc(window.GPN_CONFIG.WEBSITE || '') + '</div>';
+    h += '<div class="report">' + GPN.esc(title) + '</div>';
+    var metaParts = [];
+    metaParts.push('Generated: ' + GPN.esc(GPN.formatDateTime(new Date())));
+    if (meta && meta.subtitle) metaParts.push(GPN.esc(meta.subtitle));
+    if (meta && meta.filter) metaParts.push(GPN.esc(meta.filter));
+    h += '<div class="meta">' + metaParts.join(' · ') + '</div>';
+    h += '</header>';
+
+    h += '<table><thead><tr>';
+    headers.forEach(function (c) { h += '<th>' + GPN.esc(c) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    rows.forEach(function (r) {
+      h += '<tr>';
+      r.forEach(function (c) { h += '<td>' + GPN.esc(c) + '</td>'; });
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+
+    h += '<footer>' + rows.length + ' row(s) · ' + GPN.esc(window.GPN_CONFIG.APP_NAME || '') + '</footer>';
+    h += '</body></html>';
+    return h;
+  }
+
+  function sanitizeFilename(s) {
+    return String(s || 'report').replace(/[^a-z0-9\-_]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase();
+  }
+
+  /* ============================================================
+     BUILDERS — one per report type
+     ============================================================ */
+  var BUILDERS = { online: {}, offline: {} };
+
+  /* ============ ONLINE BUILDERS ============ */
+
+  BUILDERS.online['students-list'] = function () {
+    return GPN.api('adminListStudents').then(function (j) {
+      if (!j.ok) return j;
+      var students = (j.data && j.data.students) || [];
+      var q = (GPN.byId('rpSearch') && GPN.byId('rpSearch').value.trim().toLowerCase()) || '';
+      if (q) {
+        students = students.filter(function (s) {
+          return (String(s.Name) + ' ' + String(s.StudentID) + ' ' + String(s.Phone || '')).toLowerCase().indexOf(q) >= 0;
+        });
+      }
+      return {
+        ok: true,
+        title: 'Online Students List',
+        headers: ['Student ID', 'Name', 'Class', 'Board', 'School', 'Phone', 'Wallet', 'Access', 'Status'],
+        rows: students.map(function (s) {
+          return [s.StudentID, s.Name, s.Class || '', s.Board || '', s.School || '', s.Phone || '', s.Wallet || 0, s.Access || '', s.Status || ''];
+        }),
+        meta: { filter: q ? 'Search: ' + q : '' }
+      };
+    });
+  };
+
+  BUILDERS.online['student-full'] = function () {
+    var id = GPN.byId('rpStudent').value;
+    if (!id) return Promise.resolve({ ok: false, error: 'Select a student.' });
+    return GPN.api('adminGetStudent', { id: id }).then(function (j) {
+      if (!j.ok) return j;
+      var d = j.data;
+      var s = d.student || {};
+      var w = d.wallet || {};
+      var enr = d.enrolments || [];
+      var results = d.results || [];
+
+      var headers = ['Field', 'Value'];
+      var rows = [
+        ['Student ID', s.StudentID || ''],
+        ['Name', s.Name || ''],
+        ['Email', s.Email || ''],
+        ['Class', s.Class || ''],
+        ['Board', s.Board || ''],
+        ['School', s.School || ''],
+        ['Location', s.Location || ''],
+        ['Phone', s.Phone || ''],
+        ['WhatsApp', s.WhatsApp || ''],
+        ['Parent Name', s.ParentName || ''],
+        ['Status', s.Status || ''],
+        ['Wallet Balance', w.balance || 0],
+        ['Enrolments', enr.length],
+        ['Results', results.length]
+      ];
+      return {
+        ok: true,
+        title: 'Student Record — ' + (s.Name || id),
+        headers: headers,
+        rows: rows,
+        meta: { subtitle: s.StudentID || id }
+      };
+    });
+  };
+
+  BUILDERS.online['student-results'] = function () {
+    var id = GPN.byId('rpStudent').value;
+    if (!id) return Promise.resolve({ ok: false, error: 'Select a student.' });
+    return GPN.api('adminGetStudent', { id: id }).then(function (j) {
+      if (!j.ok) return j;
+      var d = j.data;
+      var s = d.student || {};
+      var results = d.results || [];
+      return {
+        ok: true,
+        title: 'Test Results — ' + (s.Name || id),
+        headers: ['Result ID', 'Test', 'Subject', 'Date', 'Score', 'Max', '%', 'Status'],
+        rows: results.map(function (r) {
+          return [r.ResultID, r.TestTitle || r.TestID, r.SubjectName || r.SubjectID || '', r.TestDate || '', r.MarksObtained, r.MaxMarks, r.Percentage, r.PublicationStatus];
+        }),
+        meta: { subtitle: s.StudentID || id }
+      };
+    });
+  };
+
+  BUILDERS.online['student-wallet'] = function () {
+    var id = GPN.byId('rpStudent').value;
+    if (!id) return Promise.resolve({ ok: false, error: 'Select a student.' });
+    return GPN.api('adminWalletHistory', { studentId: id, limit: 500 }).then(function (j) {
+      if (!j.ok) return j;
+      var hist = (j.data && j.data.history) || [];
+      var bal = (j.data && j.data.balance) || 0;
+      return {
+        ok: true,
+        title: 'Wallet Ledger — ' + id,
+        headers: ['Date', 'Type', 'Amount', 'Balance', 'Method', 'Reference', 'Notes'],
+        rows: hist.map(function (h) {
+          return [GPN.formatDateTime(h.EntryDate), h.Type || '', h.Amount || 0, h.BalanceAfter || 0, h.Method || '', h.Reference || '', h.Notes || ''];
+        }),
+        meta: { subtitle: id, filter: 'Balance: ' + bal }
+      };
+    });
+  };
+
+  BUILDERS.online['class-roster'] = function () {
+    var cls = GPN.byId('rpClass').value;
+    if (!cls) return Promise.resolve({ ok: false, error: 'Select a class.' });
+    return GPN.api('adminListStudents', { class: cls }).then(function (j) {
+      if (!j.ok) return j;
+      var students = (j.data && j.data.students) || [];
+      return {
+        ok: true,
+        title: 'Class Roster — ' + cls,
+        headers: ['#', 'Student ID', 'Name', 'Father/Parent', 'Phone', 'Status'],
+        rows: students.map(function (s, i) {
+          return [i + 1, s.StudentID, s.Name, s.ParentName || '', s.Phone || '', s.Status || ''];
+        }),
+        meta: { filter: 'Class: ' + cls }
+      };
+    });
+  };
+
+  BUILDERS.online['programme-list'] = function () {
+    return GPN.api('adminListProgrammes').then(function (j) {
+      if (!j.ok) return j;
+      var progs = (j.data && j.data.programmes) || [];
+      return {
+        ok: true,
+        title: 'Programmes List',
+        headers: ['ID', 'Name', 'Class', 'Board', 'Weeks', 'Tests/Week', 'Linked Tests', 'Total ₹', 'Status'],
+        rows: progs.map(function (p) {
+          return [p.ProgrammeID, p.Name, p.Class || '', p.Board || '', p.NumWeeks || 0, p.TestsPerWeek || 0, p.TestCount || 0, p.TotalPrice || 0, p.Status || ''];
+        })
+      };
+    });
+  };
+
+  BUILDERS.online['tests-list'] = function () {
+    return GPN.api('adminListTests').then(function (j) {
+      if (!j.ok) return j;
+      var tests = (j.data && j.data.tests) || [];
+      return {
+        ok: true,
+        title: 'Tests List',
+        headers: ['ID', 'Title', 'Marks', 'Duration', 'Price', 'Gap Hours', 'Status', 'Attempts', 'Submitted', 'Evaluated', 'Published'],
+        rows: tests.map(function (t) {
+          return [t.TestID, t.Title, t.TotalMarks || 0, t.Duration || 0, t.Price || 0, t.GapHours || 0, t.Status || '', t.attempts || 0, t.submitted || 0, t.evaluated || 0, t.published || 0];
+        })
+      };
+    });
+  };
+
+  BUILDERS.online['payments-list'] = function () {
+    return GPN.api('adminListPayments').then(function (j) {
+      if (!j.ok) return j;
+      var rows = (j.data && j.data.payments) || [];
+      return {
+        ok: true,
+        title: 'All Payments',
+        headers: ['Payment ID', 'Date', 'Student', 'Amount', 'Method', 'Reference', 'Status', 'Notes'],
+        rows: rows.map(function (p) {
+          return [p.PaymentID, p.PaymentDate || '', p.StudentID, p.Amount || 0, p.Method || '', p.Reference || '', p.Status || '', p.Notes || ''];
+        })
+      };
+    });
+  };
+
+  /* ============ OFFLINE BUILDERS ============ */
+
+  BUILDERS.offline['students-list'] = function () {
+    return GPN.api('adminOfflineListStudents').then(function (j) {
+      if (!j.ok) return j;
+      var students = (j.data && j.data.students) || [];
+      var q = (GPN.byId('rpSearch') && GPN.byId('rpSearch').value.trim().toLowerCase()) || '';
+      if (q) {
+        students = students.filter(function (s) {
+          return (String(s.Name) + ' ' + String(s.StudentID) + ' ' + String(s.Phone || '')).toLowerCase().indexOf(q) >= 0;
+        });
+      }
+      return {
+        ok: true,
+        title: 'Offline Students List',
+        headers: ['Student ID', 'Name', 'Class', 'Board', 'School', 'Phone', 'DOJ', 'Fee ₹', 'Fees Status', 'Status'],
+        rows: students.map(function (s) {
+          return [s.StudentID, s.Name, s.Class || '', s.Board || '', s.School || '', s.Phone || '', GPN.formatDate(s.DOJ), s.FeeAmount || 0, s.FeesStatus || '', s.Status || ''];
+        }),
+        meta: { filter: q ? 'Search: ' + q : '' }
+      };
+    });
+  };
+
+  BUILDERS.offline['student-full'] = function () {
+    var id = GPN.byId('rpStudent').value;
+    if (!id) return Promise.resolve({ ok: false, error: 'Select a student.' });
+    return GPN.api('adminOfflineGetStudent', { id: id }).then(function (j) {
+      if (!j.ok) return j;
+      var d = j.data || {};
+      var s = d.student || {};
+      var perf = d.performance || {};
+      var fees = d.fees && d.fees.summary || {};
+      var att = d.attendance || {};
+      var months = Object.keys(att).sort();
+
+      var rows = [
+        ['Student ID', s.StudentID || ''],
+        ['Name', s.Name || ''],
+        ['Class', s.Class || ''],
+        ['Board', s.Board || ''],
+        ['School', s.School || ''],
+        ['Location', s.Location || ''],
+        ['Phone', s.Phone || ''],
+        ['WhatsApp', s.WhatsApp || ''],
+        ['Parent', s.ParentName || ''],
+        ['DOJ', GPN.formatDate(s.DOJ)],
+        ['Fee (per cycle)', s.FeeAmount || 0],
+        ['Status', s.Status || ''],
+        ['---', '---'],
+        ['Overall Avg', (perf.overallAvg || 0) + '%'],
+        ['Trend', perf.trend || 'no_data'],
+        ['Fees Status', fees.status || '—'],
+        ['Fees Due', fees.due || 0],
+        ['Attendance Months', months.length]
+      ];
+      months.slice(-12).forEach(function (m) {
+        rows.push(['Attendance ' + m, att[m].percent + '% (' + att[m].present + '/' + att[m].total + ')']);
+      });
+      return {
+        ok: true,
+        title: 'Student Record — ' + (s.Name || id),
+        headers: ['Field', 'Value'],
+        rows: rows,
+        meta: { subtitle: s.StudentID || id }
+      };
+    });
+  };
+
+  BUILDERS.offline['student-fees'] = function () {
+    var id = GPN.byId('rpStudent').value;
+    if (!id) return Promise.resolve({ ok: false, error: 'Select a student.' });
+    return GPN.api('adminOfflineStudentFees', { studentId: id }).then(function (j) {
+      if (!j.ok) return j;
+      var cycles = (j.data && j.data.cycles) || [];
+      var summary = (j.data && j.data.summary) || {};
+      return {
+        ok: true,
+        title: 'Fee Ledger — ' + id,
+        headers: ['Cycle', 'Start', 'End', 'Deadline', 'Fee', 'Paid', 'Payment Date', 'Status', 'Days Late'],
+        rows: cycles.map(function (c) {
+          return [c.cycleLabel, GPN.formatDate(c.cycleStart), GPN.formatDate(c.cycleEnd), GPN.formatDate(c.deadline), c.feeAmount, c.paidAmount, c.paymentDate ? GPN.formatDate(c.paymentDate) : '', c.status, c.daysLate || 0];
+        }),
+        meta: { subtitle: id, filter: 'Current: ' + (summary.status || '—') + ' · Due: ₹' + (summary.due || 0) }
+      };
+    });
+  };
+
+  BUILDERS.offline['student-attendance'] = function () {
+    var id = GPN.byId('rpStudent').value;
+    var month = GPN.byId('rpMonth').value;
+    if (!id) return Promise.resolve({ ok: false, error: 'Select a student.' });
+    if (!month) return Promise.resolve({ ok: false, error: 'Select a month.' });
+    return GPN.api('adminOfflineAttendanceForStudent', { studentId: id, month: month }).then(function (j) {
+      if (!j.ok) return j;
+      var cur = (j.data && j.data.current) || {};
+      var records = cur.records || [];
+      return {
+        ok: true,
+        title: 'Attendance — ' + id + ' · ' + month,
+        headers: ['Date', 'Day', 'Status', 'Updated At', 'Updated By'],
+        rows: records.map(function (r) {
+          return [GPN.formatDate(r.Date), r.Day || '', r.Status || '', GPN.formatDateTime(r.UpdatedAt), r.UpdatedBy || ''];
+        }),
+        meta: {
+          subtitle: id,
+          filter: month + ' · Present: ' + (cur.present || 0) + ' / Total: ' + (cur.total || 0) + ' · ' + (cur.percent || 0) + '%'
+        }
+      };
+    });
+  };
+
+  BUILDERS.offline['student-tests'] = function () {
+    var id = GPN.byId('rpStudent').value;
+    if (!id) return Promise.resolve({ ok: false, error: 'Select a student.' });
+    return GPN.api('adminOfflineStudentTests', { studentId: id }).then(function (j) {
+      if (!j.ok) return j;
+      var tests = (j.data && j.data.tests) || [];
+      return {
+        ok: true,
+        title: 'Test Scores — ' + id,
+        headers: ['Month', 'Week', 'Type', 'Date', 'Subject', 'Score', 'Max', '%'],
+        rows: tests.map(function (t) {
+          return [t.MonthLabel, t.WeekLabel, t.TestType || '', GPN.formatDate(t.TestDate), t.Subject || '', t.Score, t.Max, t.Percent];
+        }),
+        meta: { subtitle: id }
+      };
+    });
+  };
+
+  BUILDERS.offline['class-roster'] = function () {
+    var cls = GPN.byId('rpClass').value;
+    if (!cls) return Promise.resolve({ ok: false, error: 'Select a class.' });
+    return GPN.api('adminOfflineListStudents', { class: cls }).then(function (j) {
+      if (!j.ok) return j;
+      var students = (j.data && j.data.students) || [];
+      return {
+        ok: true,
+        title: 'Class Roster — ' + cls,
+        headers: ['#', 'Student ID', 'Name', 'Parent', 'Phone', 'DOJ', 'Fee', 'Status'],
+        rows: students.map(function (s, i) {
+          return [i + 1, s.StudentID, s.Name, s.ParentName || '', s.Phone || '', GPN.formatDate(s.DOJ), s.FeeAmount || 0, s.Status || ''];
+        }),
+        meta: { filter: 'Class: ' + cls }
+      };
+    });
+  };
+
+  BUILDERS.offline['batch-roster'] = function () {
+    var batchId = GPN.byId('rpBatch').value;
+    if (!batchId) return Promise.resolve({ ok: false, error: 'Select a batch.' });
+    return Promise.all([GPN.api('adminOfflineBatchMap'), GPN.api('adminOfflineListStudents')]).then(function (res) {
+      if (!res[0].ok) return res[0];
+      var assignments = (res[0].data && res[0].data.assignments) || [];
+      var students = (res[1].ok && res[1].data && res[1].data.students) || [];
+      var stuMap = {}; students.forEach(function (s) { stuMap[s.StudentID] = s; });
+      var list = assignments.filter(function (a) { return String(a.batchId) === batchId; });
+      return {
+        ok: true,
+        title: 'Batch Roster — ' + batchId,
+        headers: ['#', 'Student ID', 'Name', 'Class', 'Phone', 'School'],
+        rows: list.map(function (a, i) {
+          var s = stuMap[a.studentId] || {};
+          return [i + 1, a.studentId, s.Name || '', s.Class || '', s.Phone || '', s.School || ''];
+        }),
+        meta: { filter: 'Batch: ' + batchId }
+      };
+    });
+  };
+
+  BUILDERS.offline['fees-summary'] = function () {
+    return GPN.api('adminOfflineFeesSummary').then(function (j) {
+      if (!j.ok) return j;
+      var d = j.data || {};
+      var byMonth = d.byMonth || {};
+      var labels = Object.keys(byMonth).sort();
+      return {
+        ok: true,
+        title: 'Fees Summary (Monthly)',
+        headers: ['Month', 'Expected ₹', 'Collected ₹', 'Due ₹', 'Paid', 'Late', 'Due Count'],
+        rows: labels.map(function (k) {
+          var m = byMonth[k];
+          return [k, m.expected || 0, m.collected || 0, m.due || 0, m.paidCount || 0, m.lateCount || 0, m.dueCount || 0];
+        }),
+        meta: { filter: 'Total due: ₹' + (d.totalDue || 0) }
+      };
+    });
+  };
+
+  BUILDERS.offline['leaderboard'] = function () {
+    return GPN.api('adminOfflineLeaderboardCached').then(function (j) {
+      if (!j.ok) return j;
+      var list = (j.data && j.data.leaderboard) || [];
+      return {
+        ok: true,
+        title: 'Leaderboard Snapshot',
+        headers: ['Rank', 'Student ID', 'Name', 'Class', 'School', 'Overall %', 'Attendance %', 'Badges'],
+        rows: list.map(function (r) {
+          return [r.rank, r.sid, r.name, r.cls || '', r.school || '', r.overallAvg + '%', r.attendancePct + '%', r.badges || ''];
+        })
+      };
+    });
+  };
+
+})();
+</script>
+</body>
+</html>
