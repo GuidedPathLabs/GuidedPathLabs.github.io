@@ -1,1 +1,577 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Admin — Guided Path Noida</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+</head>
+<body>
+
+<!-- ============================================================
+     PAGE LOADER
+     ============================================================ -->
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading Admin…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <!-- ============================================================
+       TOPBAR
+       ============================================================ -->
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">Admin <b>Console</b></div>
+    </div>
+    <div class="gpn-topbar-user">
+      <span class="gpn-user-badge" id="userBadge">—</span>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnChangePw" type="button">Password</button>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnLogout" type="button">Logout</button>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       NAV STRIP — admin pages
+       ============================================================ -->
+  <nav class="gpn-navstrip">
+    <a class="gpn-navstrip-btn active" href="admin.html">Overview</a>
+    <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
+    <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
+    <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
+    <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
+    <a class="gpn-navstrip-btn" href="admin-settings.html">Settings</a>
+  </nav>
+
+  <!-- ============================================================
+       MAIN
+       ============================================================ -->
+  <main class="gpn-main">
+
+    <!-- Hero -->
+    <section class="gpn-admin-hero">
+      <h1 class="gpn-admin-hero-title">Welcome back, <span id="heroName">Admin</span></h1>
+      <p class="gpn-admin-hero-sub">
+        Overview of GPN Central System · <span id="heroTime"></span>
+      </p>
+    </section>
+
+    <!-- Needs Attention — only shown when there's something -->
+    <section id="needsAttention" hidden>
+      <h2 class="gpn-page-title" style="font-size: 1.05rem; margin-bottom: 12px;">Needs Attention</h2>
+      <div class="gpn-quick-cards" id="attentionCards"></div>
+    </section>
+
+    <!-- Overview stats -->
+    <section>
+      <h2 class="gpn-page-title" style="font-size: 1.05rem; margin-bottom: 12px;">At a Glance</h2>
+      <div class="gpn-stats" id="statsGrid">
+        <div class="gpn-stat"><span class="gpn-stat-label">Loading</span><span class="gpn-stat-value">—</span></div>
+      </div>
+    </section>
+
+    <!-- Two-column: module stats -->
+    <section class="gpn-grid-2" style="margin-top: 20px;">
+      <div class="gpn-card">
+        <div class="gpn-card-head">
+          <h3 class="gpn-card-title">Online Module</h3>
+          <a href="admin-online.html" class="gpn-btn gpn-btn-ghost gpn-btn-sm">Manage →</a>
+        </div>
+        <div class="gpn-card-body" id="onlineStats">
+          <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+        </div>
+      </div>
+
+      <div class="gpn-card">
+        <div class="gpn-card-head">
+          <h3 class="gpn-card-title">Offline Module</h3>
+          <a href="admin-offline.html" class="gpn-btn gpn-btn-ghost gpn-btn-sm">Manage →</a>
+        </div>
+        <div class="gpn-card-body" id="offlineStats">
+          <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Automation + Estore -->
+    <section class="gpn-grid-2">
+      <div class="gpn-card">
+        <div class="gpn-card-head">
+          <h3 class="gpn-card-title">Automation Queues</h3>
+          <a href="admin-automation.html" class="gpn-btn gpn-btn-ghost gpn-btn-sm">Manage →</a>
+        </div>
+        <div class="gpn-card-body" id="autoStats">
+          <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+        </div>
+      </div>
+
+      <div class="gpn-card">
+        <div class="gpn-card-head">
+          <h3 class="gpn-card-title">E-Store</h3>
+          <a href="admin-estore.html" class="gpn-btn gpn-btn-ghost gpn-btn-sm">Manage →</a>
+        </div>
+        <div class="gpn-card-body" id="estoreStats">
+          <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Recent activity -->
+    <section style="margin-top: 20px;">
+      <div class="gpn-card">
+        <div class="gpn-card-head">
+          <h3 class="gpn-card-title">Recent Activity</h3>
+          <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnRefreshActivity" type="button">Refresh</button>
+        </div>
+        <div class="gpn-card-body" style="padding: 0;" id="activityWrap">
+          <div class="gpn-loading"><span class="gpn-spinner"></span> Loading activity…</div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="gpn-footer">
+      <div>Guided Path Noida · Admin Console</div>
+      <div style="margin-top: 6px;">
+        <a href="https://guidedpathnoida.in" target="_blank" rel="noopener">guidedpathnoida.in</a>
+        &nbsp;·&nbsp;
+        <a href="https://wa.me/guidedpathnoida" target="_blank" rel="noopener">WhatsApp</a>
+      </div>
+    </footer>
+
+  </main>
+</div>
+
+<!-- ============================================================
+     CHANGE PASSWORD MODAL
+     ============================================================ -->
+<div class="gpn-modal" id="pwModal" hidden>
+  <div class="gpn-modal-card">
+    <h3 class="gpn-modal-title">Change Password</h3>
+    <p class="gpn-modal-sub">Choose a strong password of at least 10 characters.</p>
+
+    <form id="pwForm" novalidate>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwCurrent">Current Password</label>
+        <input id="pwCurrent" type="password" class="gpn-input" autocomplete="current-password" required>
+      </div>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwNew">New Password</label>
+        <input id="pwNew" type="password" class="gpn-input" autocomplete="new-password" minlength="10" required>
+      </div>
+      <div class="gpn-field">
+        <label class="gpn-label" for="pwConfirm">Confirm New Password</label>
+        <input id="pwConfirm" type="password" class="gpn-input" autocomplete="new-password" minlength="10" required>
+      </div>
+
+      <div id="pwAlert" class="gpn-alert gpn-alert-error" hidden></div>
+
+      <div class="gpn-modal-actions">
+        <button type="button" class="gpn-btn gpn-btn-ghost" id="pwCancel">Cancel</button>
+        <button type="submit" class="gpn-btn gpn-btn-cyan" id="pwSubmit">Update Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+<script src="shared/config.js?v=1.0.0"></script>
+<script src="shared/gpn.js?v=1.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ==========================================================
+     GUARD
+     ========================================================== */
+  if (!GPN.Guard.requireAdmin()) return;
+
+  GPN.ready(function () {
+    /* ----------------------------------------------------------
+     * Boot
+     * -------------------------------------------------------- */
+    var appRoot     = GPN.byId('appRoot');
+    var pageLoading = GPN.byId('pageLoading');
+
+    /* Fill hero */
+    GPN.byId('heroName').textContent = GPN.Session.getName() || GPN.Session.getUser() || 'Admin';
+    GPN.byId('heroTime').textContent = new Date().toLocaleDateString('en-IN', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+    GPN.byId('userBadge').textContent = (GPN.Session.getName() || 'Admin');
+    GPN.byId('userBadge').title = GPN.Session.getUser() || '';
+
+    /* Reveal app */
+    appRoot.hidden = false;
+    pageLoading.hidden = true;
+
+    /* ----------------------------------------------------------
+     * Load all overview data in parallel
+     * -------------------------------------------------------- */
+    loadEverything();
+
+    /* ----------------------------------------------------------
+     * Refresh activity
+     * -------------------------------------------------------- */
+    GPN.on(GPN.byId('btnRefreshActivity'), 'click', loadActivity);
+
+    /* ----------------------------------------------------------
+     * Change password modal
+     * -------------------------------------------------------- */
+    GPN.Modal.wire('pwModal');
+    GPN.on(GPN.byId('btnChangePw'), 'click', function () {
+      GPN.byId('pwAlert').hidden = true;
+      GPN.byId('pwForm').reset();
+      GPN.Modal.open('pwModal');
+    });
+    GPN.on(GPN.byId('pwCancel'), 'click', function () { GPN.Modal.close('pwModal'); });
+
+    GPN.on(GPN.byId('pwForm'), 'submit', function (e) {
+      e.preventDefault();
+      handleChangePassword();
+    });
+
+    /* ----------------------------------------------------------
+     * Logout
+     * -------------------------------------------------------- */
+    GPN.on(GPN.byId('btnLogout'), 'click', function () {
+      if (!confirm('Sign out of GPN Central?')) return;
+      GPN.Guard.logout();
+    });
+  });
+
+
+  /* ==========================================================
+     LOAD EVERYTHING (parallel)
+     ========================================================== */
+  function loadEverything() {
+    Promise.all([
+      GPN.api('adminOnlineOverview'),
+      GPN.api('adminOfflineOverview'),
+      GPN.api('adminAutoStats'),
+      GPN.api('adminEstoreStats')
+    ]).then(function (results) {
+      var onlineRes = results[0];
+      var offlineRes = results[1];
+      var autoRes = results[2];
+      var estoreRes = results[3];
+
+      renderTopStats(onlineRes, offlineRes, autoRes, estoreRes);
+      renderModuleCards(onlineRes, offlineRes, autoRes, estoreRes);
+      renderNeedsAttention(onlineRes, offlineRes, autoRes, estoreRes);
+
+      /* Activity loads separately (non-blocking) */
+      loadActivity();
+    }).catch(function (err) {
+      console.error('Overview load failed:', err);
+      GPN.Toast.error('Could not load overview stats.');
+      GPN.byId('statsGrid').innerHTML =
+        '<div class="gpn-error-state" style="grid-column: 1 / -1;">Failed to load. Tap Refresh.</div>';
+    });
+  }
+
+
+  /* ==========================================================
+     TOP STATS
+     ========================================================== */
+  function renderTopStats(onlineRes, offlineRes, autoRes, estoreRes) {
+    var ol = (onlineRes && onlineRes.ok) ? onlineRes.data : {};
+    var hq = (offlineRes && offlineRes.ok) ? offlineRes.data : {};
+    var es = (estoreRes && estoreRes.ok) ? estoreRes.data : {};
+
+    var totalOnline  = Number(ol.totalStudents || 0);
+    var totalOffline = Number(hq.totalStudents || 0);
+    var activeTotal  = Number(ol.activeStudents || 0) + Number(hq.activeStudents || 0);
+    var combinedRevenue = Number(ol.totalWalletBalance || 0) + Number(es.monthRevenue || 0);
+
+    var statsHtml = [
+      statCard('Total Students', totalOnline + totalOffline),
+      statCard('Active', activeTotal, 'green'),
+      statCard('Online Students', totalOnline, 'info'),
+      statCard('Offline Students', totalOffline, 'info'),
+      statCard('Total Wallet', GPN.formatCurrency(ol.totalWalletBalance || 0), 'gold'),
+      statCard('Pending Evaluations', Number(ol.pendingEvaluations || 0), 'warn'),
+      statCard('Fees Due (Offline)', GPN.formatCurrency(hq.feesDue || 0), 'warn'),
+      statCard('E-Store Revenue (Month)', GPN.formatCurrency(es.monthRevenue || 0), 'gold')
+    ].join('');
+
+    GPN.byId('statsGrid').innerHTML = statsHtml;
+  }
+
+  function statCard(label, value, tone) {
+    return '<div class="gpn-stat">' +
+      '<span class="gpn-stat-label">' + GPN.esc(label) + '</span>' +
+      '<span class="gpn-stat-value ' + (tone || '') + '">' + GPN.esc(String(value)) + '</span>' +
+    '</div>';
+  }
+
+
+  /* ==========================================================
+     MODULE CARDS
+     ========================================================== */
+  function renderModuleCards(onlineRes, offlineRes, autoRes, estoreRes) {
+    /* ONLINE */
+    var ol = (onlineRes && onlineRes.ok) ? onlineRes.data : null;
+    if (ol) {
+      GPN.byId('onlineStats').innerHTML = statList([
+        ['Total students', ol.totalStudents || 0],
+        ['Active students', ol.activeStudents || 0],
+        ['Active programmes', ol.activeProgrammes || 0],
+        ['Tests today', ol.testsToday || 0],
+        ['Tests this week', ol.testsThisWeek || 0],
+        ['Pending evaluations', ol.pendingEvaluations || 0],
+        ['Pending publications', ol.pendingPublications || 0],
+        ['Total wallet balance', GPN.formatCurrency(ol.totalWalletBalance || 0)]
+      ]);
+    } else {
+      GPN.byId('onlineStats').innerHTML = statError('Online stats unavailable');
+    }
+
+    /* OFFLINE */
+    var hq = (offlineRes && offlineRes.ok) ? offlineRes.data : null;
+    if (hq) {
+      GPN.byId('offlineStats').innerHTML = statList([
+        ['Total students', hq.totalStudents || 0],
+        ['Active students', hq.activeStudents || 0],
+        ['Inactive students', hq.inactiveStudents || 0],
+        ['Active batches', hq.activeBatches || 0],
+        ['Active files', hq.activeFiles || 0],
+        ['Fees collected', GPN.formatCurrency(hq.feesCollected || 0)],
+        ['Fees expected', GPN.formatCurrency(hq.feesExpected || 0)],
+        ['Fees due', GPN.formatCurrency(hq.feesDue || 0)]
+      ]);
+    } else {
+      GPN.byId('offlineStats').innerHTML = statError('Offline stats unavailable');
+    }
+
+    /* AUTOMATION */
+    var au = (autoRes && autoRes.ok) ? autoRes.data : null;
+    if (au) {
+      GPN.byId('autoStats').innerHTML = statList([
+        ['PDF — total',    (au.pdf && au.pdf.total) || 0],
+        ['PDF — ready',    (au.pdf && au.pdf.ready) || 0],
+        ['PDF — completed',(au.pdf && au.pdf.completed) || 0],
+        ['PDF — errors',   (au.pdf && au.pdf.error) || 0],
+        ['Social — total', (au.social && au.social.total) || 0],
+        ['Social — ready', (au.social && au.social.ready) || 0],
+        ['Social — completed', (au.social && au.social.completed) || 0],
+        ['Social — errors',(au.social && au.social.error) || 0]
+      ]);
+    } else {
+      GPN.byId('autoStats').innerHTML = statError('Automation stats unavailable');
+    }
+
+    /* ESTORE */
+    var es = (estoreRes && estoreRes.ok) ? estoreRes.data : null;
+    if (es) {
+      var counts = es.productCounts || {};
+      var totalProducts = 0;
+      ['Booklet', 'Test Pack', 'Material Pack', 'Course'].forEach(function (t) {
+        totalProducts += Number((counts[t] && counts[t].total) || 0);
+      });
+      GPN.byId('estoreStats').innerHTML = statList([
+        ['Total products', totalProducts],
+        ['Total orders', es.totalOrders || 0],
+        ['Orders this month', es.ordersThisMonth || 0],
+        ['Total revenue', GPN.formatCurrency(es.totalRevenue || 0)],
+        ['Revenue this month', GPN.formatCurrency(es.monthRevenue || 0)]
+      ]);
+    } else {
+      GPN.byId('estoreStats').innerHTML = statError('E-store stats unavailable');
+    }
+  }
+
+  function statList(pairs) {
+    return '<div style="display: grid; gap: 10px;">' +
+      pairs.map(function (p) {
+        return '<div class="gpn-row-between" style="padding: 6px 0; border-bottom: 1px solid var(--border-hair); font-size: 0.85rem;">' +
+          '<span class="gpn-quiet">' + GPN.esc(p[0]) + '</span>' +
+          '<span class="gpn-strong" style="color: var(--cyan-bright);">' + GPN.esc(String(p[1])) + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  function statError(msg) {
+    return '<div class="gpn-error-state">' + GPN.esc(msg) + '</div>';
+  }
+
+
+  /* ==========================================================
+     NEEDS ATTENTION
+     ========================================================== */
+  function renderNeedsAttention(onlineRes, offlineRes, autoRes, estoreRes) {
+    var ol = (onlineRes && onlineRes.ok) ? onlineRes.data : {};
+    var hq = (offlineRes && offlineRes.ok) ? offlineRes.data : {};
+    var au = (autoRes && autoRes.ok) ? autoRes.data : {};
+
+    var cards = [];
+
+    var pendingEvals = Number(ol.pendingEvaluations || 0);
+    if (pendingEvals > 0) {
+      cards.push(attentionCard(
+        'Pending Evaluations',
+        pendingEvals + ' waiting',
+        'Students are waiting for results.',
+        'admin-online.html'
+      ));
+    }
+
+    var pendingPubs = Number(ol.pendingPublications || 0);
+    if (pendingPubs > 0) {
+      cards.push(attentionCard(
+        'Pending Publications',
+        pendingPubs + ' ready',
+        'Results evaluated but not published.',
+        'admin-online.html'
+      ));
+    }
+
+    var feesDue = Number(hq.feesDue || 0);
+    if (feesDue > 0) {
+      cards.push(attentionCard(
+        'Fees Overdue',
+        GPN.formatCurrency(feesDue),
+        'Offline students with pending fees.',
+        'admin-offline.html'
+      ));
+    }
+
+    var pdfErr = (au.pdf && Number(au.pdf.error)) || 0;
+    var socErr = (au.social && Number(au.social.error)) || 0;
+    if (pdfErr + socErr > 0) {
+      cards.push(attentionCard(
+        'Automation Errors',
+        (pdfErr + socErr) + ' jobs',
+        'Jobs failed — review and retry.',
+        'admin-automation.html'
+      ));
+    }
+
+    if (!cards.length) {
+      GPN.byId('needsAttention').hidden = true;
+      return;
+    }
+
+    GPN.byId('attentionCards').innerHTML = cards.join('');
+    GPN.byId('needsAttention').hidden = false;
+  }
+
+  function attentionCard(label, value, hint, href) {
+    return '<a class="gpn-quick-card" href="' + GPN.esc(href) + '">' +
+      '<div class="gpn-quick-label">' + GPN.esc(label) + '</div>' +
+      '<div class="gpn-quick-value">' + GPN.esc(String(value)) + '</div>' +
+      '<div class="gpn-quick-hint">' + GPN.esc(hint) + '</div>' +
+    '</a>';
+  }
+
+
+  /* ==========================================================
+     ACTIVITY
+     ========================================================== */
+  function loadActivity() {
+    var wrap = GPN.byId('activityWrap');
+    GPN.showContainerLoading(wrap, 'Loading activity…');
+
+    GPN.api('adminActivity', { limit: 30 }).then(function (json) {
+      if (!json || !json.ok) {
+        GPN.showContainerError(wrap, GPN.friendlyError(json));
+        return;
+      }
+      var rows = (json.data && json.data.activity) || [];
+      if (!rows.length) {
+        GPN.showContainerEmpty(wrap, 'No activity recorded yet.');
+        return;
+      }
+      wrap.innerHTML = renderActivityTable(rows);
+    });
+  }
+
+  function renderActivityTable(rows) {
+    return '<div class="gpn-table-wrap" style="border: none; border-radius: 0;">' +
+      '<table class="gpn-table">' +
+        '<thead><tr>' +
+          '<th>When</th><th>User</th><th>Action</th><th>Details</th>' +
+        '</tr></thead><tbody>' +
+        rows.map(function (r) {
+          return '<tr>' +
+            '<td data-label="When">' + GPN.esc(GPN.formatDateTime(r.Timestamp)) + '</td>' +
+            '<td data-label="User">' + GPN.esc(r.UserID || '—') + '</td>' +
+            '<td data-label="Action">' + GPN.esc(r.Action || '—') + '</td>' +
+            '<td data-label="Details" class="wrap">' + GPN.esc(r.Description || '—') + '</td>' +
+          '</tr>';
+        }).join('') +
+      '</tbody></table>' +
+    '</div>';
+  }
+
+
+  /* ==========================================================
+     CHANGE PASSWORD
+     ========================================================== */
+  function handleChangePassword() {
+    var alertBox = GPN.byId('pwAlert');
+    var btn      = GPN.byId('pwSubmit');
+    alertBox.hidden = true;
+
+    var current = GPN.byId('pwCurrent').value;
+    var next    = GPN.byId('pwNew').value;
+    var confirm = GPN.byId('pwConfirm').value;
+
+    if (!current || !next || !confirm) {
+      showPwError('Please fill in all fields.'); return;
+    }
+    if (next.length < 10) {
+      showPwError('New password must be at least 10 characters.'); return;
+    }
+    if (next !== confirm) {
+      showPwError('New password and confirmation do not match.'); return;
+    }
+    if (next === current) {
+      showPwError('New password must differ from the current one.'); return;
+    }
+
+    GPN.setLoading(btn, true, 'Updating…');
+
+    GPN.api('auth.changePassword', {
+      currentPassword: current,
+      newPassword:     next
+    }).then(function (json) {
+      GPN.setLoading(btn, false);
+
+      if (!json || !json.ok) {
+        showPwError(GPN.friendlyError(json));
+        return;
+      }
+
+      GPN.Session.save(json.data || {});
+      GPN.Toast.ok('Password updated. Please sign in again.');
+      GPN.Modal.close('pwModal');
+
+      setTimeout(function () {
+        GPN.Session.clear();
+        window.location.href = 'login.html';
+      }, 1400);
+    });
+  }
+
+  function showPwError(msg) {
+    var alertBox = GPN.byId('pwAlert');
+    alertBox.textContent = msg;
+    alertBox.hidden = false;
+  }
+
+})();
+</script>
+</body>
+</html>
