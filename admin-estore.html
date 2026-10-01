@@ -678,23 +678,4 @@
 })();
 </script>
 </body>
-</html>ue,
-          RewardValue:  GPN.byId('rfValue').value,
-          Notes:        GPN.byId('rfNotes').value.trim()
-        };
-        if (!payload.ReferrerName || !payload.ReferrerCode) { err.textContent = 'Name and Code required.'; err.hidden = false; return; }
-        var btn = GPN.byId('rfSave');
-        GPN.setLoading(btn, true, 'Creating…');
-        GPN.api('adminEstoreReferralCreate', payload).then(function (r) {
-          GPN.setLoading(btn, false);
-          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
-          GPN.Toast.ok('Referral created.'); closeModal(); render('referrals');
-        });
-      });
-    });
-  }
-
-})();
-</script>
-</body>
 </html>

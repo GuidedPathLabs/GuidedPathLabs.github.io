@@ -522,24 +522,4 @@
 })();
 </script>
 </body>
-</html> '</div>';
-      viewRoot.innerHTML = html;
-
-      GPN.on(GPN.byId('btnReloadLogs'), 'click', function () { render('logs'); });
-    });
-  };
-
-  /* ============================================================
-     HELPERS
-     ============================================================ */
-  function classSelect(id, value) {
-    var opts = (window.GPN_CONFIG.CLASSES || []).map(function (c) {
-      return '<option value="' + esc(c) + '"' + (value === c ? ' selected' : '') + '>' + esc(c) + '</option>';
-    }).join('');
-    return '<select id="' + id + '" class="gpn-select"><option value="">— Select —</option>' + opts + '</select>';
-  }
-
-})();
-</script>
-</body>
 </html>
