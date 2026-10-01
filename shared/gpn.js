@@ -24,8 +24,9 @@
  *   14. Clipboard
  *   15. URL query parsing
  *   16. Misc utilities
+ *   17. Service worker registration
  *
- * Version: 1.0.0
+ * Version: 1.0.1
  * ============================================================================
  */
 
@@ -426,7 +427,6 @@
       if (!m) return;
       m.hidden = false;
       m.setAttribute('aria-hidden', 'false');
-      /* Focus first input if any */
       var first = m.querySelector('input,select,textarea,button');
       if (first) setTimeout(function () { try { first.focus(); } catch (e) {} }, 30);
     },
@@ -771,5 +771,29 @@
     uuid:      uuid,
     todayStr:  todayStr
   };
+
+
+  /* ==========================================================================
+   * 17. SERVICE WORKER REGISTRATION
+   * ==========================================================================
+   * Registers sw.js on window load. Safe to call on every page — the browser
+   * silently no-ops if the SW is already registered with the same scope.
+   *
+   * Silent on failure — the app works fine without a service worker; it just
+   * doesn't get offline caching or PWA install prompt.
+   * ======================================================================== */
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker
+        .register('sw.js', { scope: './' })
+        .catch(function (err) {
+          /* Silent — SW is a progressive enhancement, not a requirement */
+          if (window.console && console.warn) {
+            console.warn('GPN: Service worker registration failed:', err);
+          }
+        });
+    });
+  }
 
 })(window, document);
