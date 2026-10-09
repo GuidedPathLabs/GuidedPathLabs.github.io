@@ -26,7 +26,7 @@
  *   16. Misc utilities
  *   17. Service worker registration
  *
- * Version: 1.0.1
+ * Version: 2.0.0
  * ============================================================================
  */
 
@@ -186,7 +186,14 @@
     INVALID_INPUT:       'Some fields are invalid. Please review.',
     MISSING_FIELDS:      'Some required fields are missing.',
     NOT_FOUND:           'Record not found.',
-    DUPLICATE_ID:        'This ID is already in use.'
+    DUPLICATE_ID:        'This ID is already in use.',
+    DUPLICATE_USERNAME:  'This username is already in use.',
+    INVALID_USERNAME:    'Username must be 3-30 letters, digits, dot, dash or underscore.',
+    WEAK_PASSWORD:       'Password is too short (minimum 10 characters).',
+    SELF_CHANGE:         'You cannot change your own role or status.',
+    LAST_SUPERADMIN:     'At least one active super admin must remain.',
+    INVALID_ROLE:        'Invalid role.',
+    INVALID_EMAIL:       'Invalid email address.'
   };
 
   function friendlyError(json) {

@@ -8,7 +8,7 @@
  *
  * Every page reads from window.GPN_CONFIG.
  *
- * Version: 1.0.0
+ * Version: 2.0.0
  * ============================================================================
  */
 
@@ -24,7 +24,7 @@
 
     /* Frontend version — bump when deploying new static assets so
      * browsers fetch fresh CSS/JS (we append ?v=<version> in includes). */
-    VERSION: '1.0.0',
+    VERSION: '2.0.0',
 
     /* ------------------------------------------------------------------
      * Identity
