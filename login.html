@@ -1,1 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
 
+  <title>Sign In — Guided Path Noida</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+
+  <!-- Correct shared stylesheet path -->
+  <link rel="stylesheet" href="shared/gpn.css?v=2.0.1">
+</head>
+
+<body class="gpn-login-shell">
+
+  <main class="gpn-login-card" id="loginCard">
+
+    <!-- Brand -->
+    <div class="gpn-login-brand">
+      <div class="gpn-login-logo">GPN</div>
+      <h1 class="gpn-login-title">Guided Path Noida</h1>
+      <p class="gpn-login-sub" id="modeSubtitle">
+        Student Sign In
+      </p>
+    </div>
+
+    <div class="gpn-login-divider"></div>
+
+    <!-- Login form -->
+    <form id="loginForm" autocomplete="on" novalidate>
+
+      <div class="gpn-field">
+        <label
+          class="gpn-label"
+          for="loginId"
+          id="loginIdLabel"
+        >
+          Student ID
+        </label>
+
+        <input
+          id="loginId"
+          class="gpn-input"
+          type="text"
+          name="username"
+          inputmode="text"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          autocomplete="username"
+          placeholder="e.g. ol-arnav042 / hq-priya108"
+          required
+        >
+      </div>
+
+      <div class="gpn-field">
+        <label class="gpn-label" for="password">
+          Password
+        </label>
+
+        <input
+          id="password"
+          class="gpn-input"
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          placeholder="Enter your password"
+          required
+        >
+      </div>
+
+      <!-- Login error -->
+      <div
+        id="loginError"
+        class="gpn-alert gpn-alert-error"
+        role="alert"
+        aria-live="polite"
+        hidden
+      ></div>
+
+      <!-- Submit -->
+      <button
+        type="submit"
+        id="loginBtn"
+        class="gpn-btn gpn-btn-primary gpn-btn-block gpn-btn-lg"
+        style="margin-top: 20px;"
+      >
+        Sign In →
+      </button>
+
+    </form>
+
+    <!-- Student / administrator mode switch -->
+    <div class="gpn-login-foot">
+      <a href="#" id="modeSwitch">Admin Login →</a>
+    </div>
+
+    <!-- Support -->
+    <div
+      class="gpn-login-foot"
+      style="margin-top: 8px; font-size: 0.68rem; letter-spacing: 0.5px;"
+    >
+      Trouble signing in?
+      <a
+        href="https://wa.me/91XXXXXXXXXX"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Contact us on WhatsApp
+      </a>
+    </div>
+
+  </main>
+
+  <!-- Correct shared JavaScript paths -->
+  <script src="shared/config.js?v=2.0.1"></script>
+  <script src="shared/gpn.js?v=2.0.1"></script>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /*
+       * Verify that the shared JavaScript loaded.
+       * Show a visible error instead of leaving a dead form.
+       */
+      if (
+        typeof window.GPN === 'undefined' ||
+        typeof window.GPN.ready !== 'function'
+      ) {
+        var errorBox = document.getElementById('loginError');
+
+        if (errorBox) {
+          errorBox.textContent =
+            'The login system could not load. Please refresh the page.';
+          errorBox.hidden = false;
+        }
+
+        console.error(
+          'GPN login initialization failed: shared/gpn.js was not loaded correctly.'
+        );
+
+        return;
+      }
+
+      GPN.ready(function () {
+
+        if (GPN.Guard.redirectIfLoggedIn()) {
+          return;
+        }
+
+        var form = GPN.byId('loginForm');
+        var idInput = GPN.byId('loginId');
+        var pwInput = GPN.byId('password');
+        var btn = GPN.byId('loginBtn');
+        var errBox = GPN.byId('loginError');
+        var idLabel = GPN.byId('loginIdLabel');
+        var modeSubtitle = GPN.byId('modeSubtitle');
+        var modeSwitch = GPN.byId('modeSwitch');
+
+        var currentRole = 'STUDENT';
+        var submitting = false;
+
+        function showError(message) {
+          errBox.textContent = message;
+          errBox.hidden = false;
+        }
+
+        function clearError() {
+          errBox.textContent = '';
+          errBox.hidden = true;
+        }
+
+        function applyMode(role) {
+          currentRole = role;
+
+          if (role === 'ADMIN') {
+            modeSubtitle.textContent = 'Administrator Access';
+            idLabel.textContent = 'Admin ID';
+            idInput.placeholder = 'Enter your admin ID';
+            modeSwitch.textContent = '← Student Login';
+
+            document.title = 'Admin Sign In — GPN';
+          } else {
+            modeSubtitle.textContent = 'Student Sign In';
+            idLabel.textContent = 'Student ID';
+
+            idInput.placeholder =
+              'e.g. ol-arnav042 / hq-priya108 / pr-rajesh001';
+
+            modeSwitch.textContent = 'Admin Login →';
+
+            document.title = 'Sign In — Guided Path Noida';
+          }
+
+          clearError();
+          idInput.value = '';
+          pwInput.value = '';
+          idInput.focus();
+        }
+
+        function withMustChange(path) {
+          if (!path) {
+            return 'login.html?mustChange=1';
+          }
+
+          var parts = path.split('#');
+          var base = parts[0];
+          var hash = parts.length > 1 ? '#' + parts.slice(1).join('#') : '';
+
+          if (/[?&]mustChange=/.test(base)) {
+            base = base.replace(
+              /([?&])mustChange=[^&]*/,
+              '$1mustChange=1'
+            );
+          } else {
+            base += (base.indexOf('?') >= 0 ? '&' : '?') +
+              'mustChange=1';
+          }
+
+          return base + hash;
+        }
+
+        /*
+         * Student / administrator mode switch
+         */
+        GPN.on(modeSwitch, 'click', function (event) {
+          event.preventDefault();
+
+          applyMode(
+            currentRole === 'ADMIN' ? 'STUDENT' : 'ADMIN'
+          );
+        });
+
+        /*
+         * Login submission
+         */
+        GPN.on(form, 'submit', function (event) {
+          event.preventDefault();
+
+          if (submitting) {
+            return;
+          }
+
+          clearError();
+
+          var loginId = idInput.value.trim();
+          var password = pwInput.value;
+
+          if (!loginId) {
+            showError('Please enter your ID.');
+            idInput.focus();
+            return;
+          }
+
+          if (!password) {
+            showError('Please enter your password.');
+            pwInput.focus();
+            return;
+          }
+
+          if (password.length < 6) {
+            showError('Password must be at least 6 characters.');
+            pwInput.focus();
+            return;
+          }
+
+          submitting = true;
+          btn.disabled = true;
+
+          GPN.setLoading(btn, true, 'Signing in…');
+
+          GPN.api('auth.login', {
+            loginId: loginId,
+            password: password,
+            role: currentRole
+          }).then(function (json) {
+
+            if (!json || !json.ok) {
+              showError(
+                GPN.friendlyError(json) ||
+                'Unable to sign in. Please try again.'
+              );
+
+              pwInput.value = '';
+              pwInput.focus();
+              return;
+            }
+
+            /*
+             * Save the authenticated session.
+             */
+            GPN.Session.save(json.data || {});
+
+            /*
+             * Determine the correct landing page.
+             */
+            var dest = GPN.Session.landingPage();
+
+            /*
+             * Preserve the existing forced-password-change flow.
+             */
+            if (json.data && json.data.mustChange === true) {
+              dest = withMustChange(dest);
+
+              GPN.Toast.warn(
+                'Please change your password to continue.'
+              );
+            } else {
+              GPN.Toast.ok(
+                'Welcome, ' +
+                (
+                  json.data.name ||
+                  json.data.userId ||
+                  loginId
+                )
+              );
+            }
+
+            window.setTimeout(function () {
+              window.location.href = dest;
+            }, 400);
+
+          }).catch(function (error) {
+
+            console.error('Login error:', error);
+
+            showError(
+              'Unable to contact the login service. Please try again.'
+            );
+
+          }).finally(function () {
+
+            submitting = false;
+            btn.disabled = false;
+            GPN.setLoading(btn, false);
+
+          });
+        });
+
+        /*
+         * Enter key on password field submits the form.
+         * Native form submission also supports the Enter key.
+         */
+        GPN.on(pwInput, 'keydown', function (event) {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+
+            if (typeof form.requestSubmit === 'function') {
+              form.requestSubmit();
+            } else {
+              form.dispatchEvent(
+                new Event('submit', { cancelable: true })
+              );
+            }
+          }
+        });
+
+        /*
+         * Optional URL hint:
+         * login.html?role=admin
+         */
+        var query = GPN.query();
+
+        if (
+          query &&
+          String(query.role || '').toLowerCase() === 'admin'
+        ) {
+          applyMode('ADMIN');
+        } else {
+          idInput.focus();
+        }
+
+      });
+
+    })();
+  </script>
+
+</body>
+</html>
