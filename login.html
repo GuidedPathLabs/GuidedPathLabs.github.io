@@ -12,11 +12,15 @@
   <link rel="icon" href="assets/icons/favicon.ico">
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
 
-  <!-- Correct shared stylesheet path -->
-  <link rel="stylesheet" href="shared/gpn.css?v=2.0.1">
+  <!-- Shared GPN V2 stylesheet -->
+  <link rel="stylesheet" href="shared/gpn.v2.css?v=2.0.0">
 </head>
 
 <body class="gpn-login-shell">
+
+  <!-- ============================================================
+       LOGIN CARD
+       ============================================================ -->
 
   <main class="gpn-login-card" id="loginCard">
 
@@ -24,14 +28,12 @@
     <div class="gpn-login-brand">
       <div class="gpn-login-logo">GPN</div>
       <h1 class="gpn-login-title">Guided Path Noida</h1>
-      <p class="gpn-login-sub" id="modeSubtitle">
-        Student Sign In
-      </p>
+      <p class="gpn-login-sub" id="modeSubtitle">Student Sign In</p>
     </div>
 
     <div class="gpn-login-divider"></div>
 
-    <!-- Login form -->
+    <!-- Form -->
     <form id="loginForm" autocomplete="on" novalidate>
 
       <div class="gpn-field">
@@ -39,15 +41,12 @@
           class="gpn-label"
           for="loginId"
           id="loginIdLabel"
-        >
-          Student ID
-        </label>
+        >Student ID</label>
 
         <input
           id="loginId"
           class="gpn-input"
           type="text"
-          name="username"
           inputmode="text"
           autocapitalize="none"
           autocorrect="off"
@@ -59,27 +58,24 @@
       </div>
 
       <div class="gpn-field">
-        <label class="gpn-label" for="password">
-          Password
-        </label>
+        <label class="gpn-label" for="password">Password</label>
 
         <input
           id="password"
           class="gpn-input"
           type="password"
-          name="password"
           autocomplete="current-password"
           placeholder="Enter your password"
+          minlength="10"
           required
         >
       </div>
 
-      <!-- Login error -->
+      <!-- Inline alert -->
       <div
         id="loginError"
         class="gpn-alert gpn-alert-error"
         role="alert"
-        aria-live="polite"
         hidden
       ></div>
 
@@ -95,7 +91,7 @@
 
     </form>
 
-    <!-- Student / administrator mode switch -->
+    <!-- Mode switch link -->
     <div class="gpn-login-foot">
       <a href="#" id="modeSwitch">Admin Login →</a>
     </div>
@@ -107,27 +103,27 @@
     >
       Trouble signing in?
       <a
-        href="https://wa.me/91XXXXXXXXXX"
+        href="https://wa.me/guidedpathnoida"
         target="_blank"
-        rel="noopener noreferrer"
-      >
-        Contact us on WhatsApp
-      </a>
+        rel="noopener"
+      >Contact us on WhatsApp</a>
     </div>
 
   </main>
 
-  <!-- Correct shared JavaScript paths -->
-  <script src="shared/config.js?v=2.0.1"></script>
-  <script src="shared/gpn.js?v=2.0.1"></script>
+  <!-- ============================================================
+       SHARED V2 SCRIPTS
+       ============================================================ -->
+
+  <script src="shared/config.v2.js?v=2.0.0"></script>
+  <script src="shared/gpn.v2.js?v=2.0.0"></script>
 
   <script>
     (function () {
       'use strict';
 
       /*
-       * Verify that the shared JavaScript loaded.
-       * Show a visible error instead of leaving a dead form.
+       * Detect missing shared JavaScript.
        */
       if (
         typeof window.GPN === 'undefined' ||
@@ -142,12 +138,15 @@
         }
 
         console.error(
-          'GPN login initialization failed: shared/gpn.js was not loaded correctly.'
+          'GPN initialization failed. Check config.v2.js and gpn.v2.js.'
         );
 
         return;
       }
 
+      /*
+       * Redirect already-authenticated users.
+       */
       GPN.ready(function () {
 
         if (GPN.Guard.redirectIfLoggedIn()) {
@@ -172,10 +171,13 @@
         }
 
         function clearError() {
-          errBox.textContent = '';
           errBox.hidden = true;
+          errBox.textContent = '';
         }
 
+        /*
+         * Switch between student and administrator login.
+         */
         function applyMode(role) {
           currentRole = role;
 
@@ -186,6 +188,7 @@
             modeSwitch.textContent = '← Student Login';
 
             document.title = 'Admin Sign In — GPN';
+
           } else {
             modeSubtitle.textContent = 'Student Sign In';
             idLabel.textContent = 'Student ID';
@@ -204,30 +207,21 @@
           idInput.focus();
         }
 
+        /*
+         * Append the forced-password-change query parameter.
+         */
         function withMustChange(path) {
           if (!path) {
             return 'login.html?mustChange=1';
           }
 
-          var parts = path.split('#');
-          var base = parts[0];
-          var hash = parts.length > 1 ? '#' + parts.slice(1).join('#') : '';
+          var separator = path.indexOf('?') >= 0 ? '&' : '?';
 
-          if (/[?&]mustChange=/.test(base)) {
-            base = base.replace(
-              /([?&])mustChange=[^&]*/,
-              '$1mustChange=1'
-            );
-          } else {
-            base += (base.indexOf('?') >= 0 ? '&' : '?') +
-              'mustChange=1';
-          }
-
-          return base + hash;
+          return path + separator + 'mustChange=1';
         }
 
         /*
-         * Student / administrator mode switch
+         * Mode switch.
          */
         GPN.on(modeSwitch, 'click', function (event) {
           event.preventDefault();
@@ -238,7 +232,7 @@
         });
 
         /*
-         * Login submission
+         * Submit login.
          */
         GPN.on(form, 'submit', function (event) {
           event.preventDefault();
@@ -281,11 +275,10 @@
             role: currentRole
           }).then(function (json) {
 
+            GPN.setLoading(btn, false);
+
             if (!json || !json.ok) {
-              showError(
-                GPN.friendlyError(json) ||
-                'Unable to sign in. Please try again.'
-              );
+              showError(GPN.friendlyError(json));
 
               pwInput.value = '';
               pwInput.focus();
@@ -293,24 +286,28 @@
             }
 
             /*
-             * Save the authenticated session.
+             * Save session.
              */
             GPN.Session.save(json.data || {});
 
             /*
-             * Determine the correct landing page.
+             * Determine destination.
              */
-            var dest = GPN.Session.landingPage();
+            var destination = GPN.Session.landingPage();
 
             /*
-             * Preserve the existing forced-password-change flow.
+             * Handle mandatory password change.
              */
-            if (json.data && json.data.mustChange === true) {
-              dest = withMustChange(dest);
+            if (
+              json.data &&
+              json.data.mustChange === true
+            ) {
+              destination = withMustChange(destination);
 
               GPN.Toast.warn(
                 'Please change your password to continue.'
               );
+
             } else {
               GPN.Toast.ok(
                 'Welcome, ' +
@@ -323,7 +320,7 @@
             }
 
             window.setTimeout(function () {
-              window.location.href = dest;
+              window.location.href = destination;
             }, 400);
 
           }).catch(function (error) {
@@ -331,21 +328,21 @@
             console.error('Login error:', error);
 
             showError(
-              'Unable to contact the login service. Please try again.'
+              'Something went wrong. Please try again.'
             );
 
           }).finally(function () {
 
             submitting = false;
             btn.disabled = false;
+
             GPN.setLoading(btn, false);
 
           });
         });
 
         /*
-         * Enter key on password field submits the form.
-         * Native form submission also supports the Enter key.
+         * Enter key on password field.
          */
         GPN.on(pwInput, 'keydown', function (event) {
           if (event.key === 'Enter') {
