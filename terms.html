@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="assets/icons/favicon.ico">
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
-  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+  <link rel="stylesheet" href="shared/gpn.v2.css?v=2.0.0">
   <style>
     /* Small page-specific overrides — rest uses shared gpn.css */
     .terms-wrap {
@@ -328,7 +328,7 @@
         <h3>3.5 Data Storage &amp; Security</h3>
         <ul>
           <li>Data is stored on Google Workspace services (Sheets, Drive) with access restricted to GPN.</li>
-          <li>Passwords are hashed using a secure one-way algorithm. Plain-text passwords are never stored.</li>
+          <li>Passwords are stored only as salted one-way hashes. Passwords migrated from older systems are converted to hashes on first login.</li>
           <li>Sessions expire automatically after 12 hours.</li>
           <li>Login attempts are rate-limited to prevent brute-force attacks.</li>
           <li>Backups are taken periodically to prevent loss.</li>
@@ -338,7 +338,7 @@
         <ul>
           <li>Active student records are retained while you remain enrolled with GPN.</li>
           <li>After you leave GPN, your records may be retained for up to 7 years to comply with tax and accounting obligations, after which they are deleted.</li>
-          <li>Session and login-attempt logs are purged automatically after 30 days.</li>
+          <li>Expired login-session records are removed automatically every week. Failed-login records are kept for security review.</li>
         </ul>
 
         <h3>3.7 Your Rights</h3>
@@ -616,8 +616,8 @@
 <!-- ============================================================
      SCRIPTS
      ============================================================ -->
-<script src="shared/config.js?v=1.0.0"></script>
-<script src="shared/gpn.js?v=1.0.0"></script>
+<script src="shared/config.v2.js?v=2.0.0"></script>
+<script src="shared/gpn.v2.js?v=2.0.0"></script>
 <script>
 (function () {
   'use strict';

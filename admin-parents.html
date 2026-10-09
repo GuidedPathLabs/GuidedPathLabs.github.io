@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a192f">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Parents — GPN Admin</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="shared/gpn.v2.css?v=2.0.0">
+</head>
+<body>
+
+<div class="gpn-page-loading" id="pageLoading">
+  <div class="gpn-spinner"></div>
+  <div>Loading…</div>
+</div>
+
+<div class="gpn-app" hidden id="appRoot">
+
+  <header class="gpn-topbar">
+    <div class="gpn-topbar-brand">
+      <div class="gpn-brand-mark">GPN</div>
+      <div class="gpn-brand-name">Parent <b>Accounts</b></div>
+    </div>
+    <div class="gpn-topbar-user">
+      <span class="gpn-user-badge" id="userBadge">—</span>
+      <button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="btnLogout" type="button">Logout</button>
+    </div>
+  </header>
+
+  <nav class="gpn-navstrip">
+    <a class="gpn-navstrip-btn" href="admin.html">Overview</a>
+    <a class="gpn-navstrip-btn" href="admin-online.html">Online</a>
+    <a class="gpn-navstrip-btn" href="admin-offline.html">Offline</a>
+    <a class="gpn-navstrip-btn" href="admin-master.html">Master</a>
+    <a class="gpn-navstrip-btn active" href="admin-parents.html">Parents</a>
+    <a class="gpn-navstrip-btn" href="admin-automation.html">Automation</a>
+    <a class="gpn-navstrip-btn" href="admin-estore.html">E-Store</a>
+    <a class="gpn-navstrip-btn" href="admin-reports.html">Reports</a>
+    <a class="gpn-navstrip-btn" href="admin-settings.html">Settings</a>
+  </nav>
+
+  <main class="gpn-main">
+    <div id="viewRoot">
+      <div class="gpn-loading"><span class="gpn-spinner"></span> Loading…</div>
+    </div>
+  </main>
+</div>
+
+<div class="gpn-modal" id="modalGeneric" hidden>
+  <div class="gpn-modal-card" id="modalGenericCard"></div>
+</div>
+
+<script src="shared/config.v2.js?v=2.0.0"></script>
+<script src="shared/gpn.v2.js?v=2.0.0"></script>
+<script>
+(function () {
+  'use strict';
+
+  if (!GPN.Guard.requireAdmin()) return;
+
+  var viewRoot = null;
+  var parents = [];
+  var students = [];
+  var studentMap = {};
+
+  GPN.ready(function () {
+    viewRoot = GPN.byId('viewRoot');
+    GPN.byId('userBadge').textContent = GPN.Session.getName() || 'Admin';
+    GPN.byId('userBadge').title = GPN.Session.getUser() || '';
+    GPN.on(GPN.byId('btnLogout'), 'click', function () {
+      if (confirm('Sign out?')) GPN.Guard.logout();
+    });
+    GPN.Modal.wire('modalGeneric');
+    GPN.byId('appRoot').hidden = false;
+    GPN.byId('pageLoading').hidden = true;
+    load();
+  });
+
+  function esc(s) { return GPN.esc(s); }
+  function openModal(html, onReady) {
+    GPN.byId('modalGenericCard').innerHTML = html;
+    GPN.Modal.open('modalGeneric');
+    if (typeof onReady === 'function') setTimeout(onReady, 20);
+  }
+  function closeModal() { GPN.Modal.close('modalGeneric'); }
+  function pill(text, tone) {
+    var cls = tone || String(text || '').toLowerCase().replace(/[^a-z]/g, '');
+    return '<span class="gpn-pill ' + esc(cls) + '">' + esc(text) + '</span>';
+  }
+  function statCard(label, value, tone) {
+    return '<div class="gpn-stat"><span class="gpn-stat-label">' + esc(label) + '</span><span class="gpn-stat-value ' + (tone || '') + '">' + esc(String(value)) + '</span></div>';
+  }
+
+  function addStudents(res, mod) {
+    var list = (res && res.ok && res.data && res.data.students) || [];
+    list.forEach(function (s) {
+      if (String(s.Status || '').toUpperCase() === 'DELETED') return;
+      var o = { id: s.StudentID, name: s.Name || s.StudentID, cls: s.Class || '', mod: mod };
+      students.push(o);
+      studentMap[o.id] = o;
+    });
+  }
+
+  function load() {
+    GPN.showContainerLoading(viewRoot, 'Loading…');
+    Promise.all([
+      GPN.api('adminListParents'),
+      GPN.api('adminListStudents'),
+      GPN.api('adminOfflineListStudents'),
+      GPN.api('adminMasterListStudents')
+    ]).then(function (res) {
+      if (!res[0].ok) { GPN.showContainerError(viewRoot, GPN.friendlyError(res[0])); return; }
+      parents = (res[0].data && res[0].data.parents) || [];
+      students = [];
+      studentMap = {};
+      addStudents(res[1], 'ol');
+      addStudents(res[2], 'hq');
+      addStudents(res[3], 'mp');
+      render();
+    }).catch(function (err) {
+      console.error(err);
+      GPN.showContainerError(viewRoot, 'Failed to load.');
+    });
+  }
+
+  function linkedNames(ids) {
+    var list = String(ids || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    if (!list.length) return '<span class="gpn-quiet">None</span>';
+    return list.map(function (id) {
+      var s = studentMap[id];
+      return esc(s ? s.name : id) + ' <span class="gpn-quiet gpn-mono" style="font-size:0.68rem;">' + esc(id) + '</span>';
+    }).join('<br>');
+  }
+
+  function render() {
+    var active = parents.filter(function (p) { return String(p.Status).toUpperCase() === 'ACTIVE'; }).length;
+    var unlinked = parents.filter(function (p) { return !String(p.LinkedStudentIDs || '').trim(); }).length;
+
+    var html =
+      '<div class="gpn-stats">' +
+        statCard('Total Parents', parents.length) +
+        statCard('Active', active, 'green') +
+        statCard('No Student Linked', unlinked, unlinked ? 'warn' : '') +
+      '</div>' +
+      '<div class="gpn-card"><div class="gpn-card-head">' +
+        '<h3 class="gpn-card-title">Parents (' + parents.length + ')</h3>' +
+        '<button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="btnAddParent">+ Add Parent</button>' +
+      '</div><div class="gpn-card-body">' +
+        '<input class="gpn-search" id="parentSearch" placeholder="Search by name, ID, phone…">' +
+      '</div>';
+
+    if (!parents.length) {
+      html += '<div class="gpn-card-body"><div class="gpn-empty-state">No parent accounts yet.</div></div>';
+    } else {
+      html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr>' +
+        '<th>ID</th><th>Name</th><th>Phone</th><th>Linked Students</th><th>Status</th><th>Actions</th>' +
+        '</tr></thead><tbody id="parentRows">';
+      parents.forEach(function (p) {
+        var search = [p.Name, p.ParentID, p.Phone].join(' ').toLowerCase();
+        html += '<tr data-search="' + esc(search) + '">' +
+          '<td data-label="ID" class="gpn-mono">' + esc(p.ParentID) + '</td>' +
+          '<td data-label="Name">' + esc(p.Name) + '</td>' +
+          '<td data-label="Phone">' + esc(p.Phone || '—') + '</td>' +
+          '<td data-label="Linked" class="wrap">' + linkedNames(p.LinkedStudentIDs) + '</td>' +
+          '<td data-label="Status">' + pill(p.Status || '—') + '</td>' +
+          '<td data-label="Actions">' +
+            '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="edit" data-id="' + esc(p.ParentID) + '">Edit</button> ' +
+            '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-act="pw" data-id="' + esc(p.ParentID) + '">Reset PW</button> ' +
+            '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-act="del" data-id="' + esc(p.ParentID) + '">Delete</button>' +
+          '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+    viewRoot.innerHTML = html;
+
+    GPN.on(GPN.byId('btnAddParent'), 'click', addParentModal);
+
+    var search = GPN.byId('parentSearch');
+    if (search) {
+      GPN.on(search, 'input', GPN.debounce(function () {
+        var q = search.value.toLowerCase().trim();
+        GPN.$$('#parentRows tr').forEach(function (tr) {
+          tr.style.display = (!q || (tr.dataset.search || '').indexOf(q) >= 0) ? '' : 'none';
+        });
+      }, 150));
+    }
+
+    GPN.$$('#parentRows button[data-act]').forEach(function (b) {
+      GPN.on(b, 'click', function () {
+        var id = b.dataset.id, act = b.dataset.act;
+        if (act === 'edit') editParentModal(id);
+        if (act === 'pw')   resetPwModal(id);
+        if (act === 'del')  deleteParent(id);
+      });
+    });
+  }
+
+  function findParent(id) {
+    for (var i = 0; i < parents.length; i++) if (parents[i].ParentID === id) return parents[i];
+    return null;
+  }
+
+  /* ---------- student picker ---------- */
+  function pickerHtml(prefix, selectedIds) {
+    var sel = {};
+    (selectedIds || []).forEach(function (x) { sel[x] = true; });
+    var rows = students.map(function (s) {
+      var modLabel = s.mod === 'ol' ? 'Online' : s.mod === 'hq' ? 'Offline' : 'Master';
+      return '<label class="gpn-check" style="padding:7px 0;border-bottom:1px solid var(--border-hair);" data-search="' + esc((s.name + ' ' + s.id + ' ' + s.cls).toLowerCase()) + '">' +
+        '<input type="checkbox" value="' + esc(s.id) + '"' + (sel[s.id] ? ' checked' : '') + '> ' +
+        '<span>' + esc(s.name) + ' <span class="gpn-quiet" style="font-size:0.72rem;">' + esc(s.id) + (s.cls ? ' · ' + esc(s.cls) : '') + ' · ' + modLabel + '</span></span></label>';
+    }).join('');
+    return '<div class="gpn-field"><label class="gpn-label">Linked Students</label>' +
+      '<input class="gpn-search" id="' + prefix + 'Search" placeholder="Search students…" style="margin-bottom:8px;">' +
+      '<div id="' + prefix + 'List" style="max-height:32dvh;overflow-y:auto;border:1px solid var(--border-soft);border-radius:6px;padding:2px 10px;">' +
+        (rows || '<div class="gpn-quiet" style="padding:10px 0;">No students found.</div>') +
+      '</div></div>';
+  }
+
+  function wirePicker(prefix) {
+    var s = GPN.byId(prefix + 'Search');
+    if (!s) return;
+    GPN.on(s, 'input', GPN.debounce(function () {
+      var q = s.value.toLowerCase().trim();
+      GPN.$$('#' + prefix + 'List label').forEach(function (l) {
+        l.style.display = (!q || (l.dataset.search || '').indexOf(q) >= 0) ? '' : 'none';
+      });
+    }, 120));
+  }
+
+  function picked(prefix) {
+    return GPN.$$('#' + prefix + 'List input[type=checkbox]').filter(function (c) { return c.checked; })
+      .map(function (c) { return c.value; });
+  }
+
+  /* ---------- add ---------- */
+  function addParentModal() {
+    var html =
+      '<h3 class="gpn-modal-title">Add Parent</h3>' +
+      '<p class="gpn-modal-sub">ID is generated as pr-&lt;firstname&gt;&lt;serial&gt;. Default password = phone digits.</p>' +
+      '<div class="gpn-field"><label class="gpn-label">Parent Name</label><input id="apName" class="gpn-input"></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Phone</label><input id="apPhone" class="gpn-input" inputmode="tel"><span class="gpn-hint">Becomes the default password.</span></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Email (optional)</label><input id="apEmail" class="gpn-input" inputmode="email"></div>' +
+      '</div>' +
+      pickerHtml('ap', []) +
+      '<div id="apErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="apCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-cyan" id="apSave">Create</button>' +
+      '</div>';
+    openModal(html, function () {
+      wirePicker('ap');
+      GPN.on(GPN.byId('apCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('apSave'), 'click', function () {
+        var err = GPN.byId('apErr'); err.hidden = true;
+        var payload = {
+          Name: GPN.byId('apName').value.trim(),
+          Phone: GPN.byId('apPhone').value.trim(),
+          Email: GPN.byId('apEmail').value.trim(),
+          LinkedStudentIDs: picked('ap')
+        };
+        if (!payload.Name) { err.textContent = 'Name required.'; err.hidden = false; return; }
+        if (!payload.Phone) { err.textContent = 'Phone required (default password).'; err.hidden = false; return; }
+        var btn = GPN.byId('apSave');
+        GPN.setLoading(btn, true, 'Creating…');
+        GPN.api('adminCreateParent', payload).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          showCredentials(r.data, payload.LinkedStudentIDs.length);
+          load();
+        });
+      });
+    });
+  }
+
+  function showCredentials(d, requested) {
+    var linked = (d.LinkedStudents || []).length;
+    var text = 'Parent ID: ' + d.ParentID + '\nPassword: ' + d.DefaultPassword;
+    var html =
+      '<h3 class="gpn-modal-title">Parent Created</h3>' +
+      '<div class="gpn-card"><div class="gpn-card-body">' +
+        '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span class="gpn-quiet">Parent ID</span><span class="gpn-mono">' + esc(d.ParentID) + '</span></div>' +
+        '<div class="gpn-row-between" style="padding:6px 0;border-bottom:1px solid var(--border-hair);"><span class="gpn-quiet">Password</span><span class="gpn-mono">' + esc(d.DefaultPassword) + '</span></div>' +
+        '<div class="gpn-row-between" style="padding:6px 0;"><span class="gpn-quiet">Students linked</span><span>' + linked + (linked < requested ? ' of ' + requested : '') + '</span></div>' +
+      '</div></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="crCopy">Copy</button>' +
+        '<button class="gpn-btn gpn-btn-cyan" id="crClose">Done</button>' +
+      '</div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('crCopy'), 'click', function () { GPN.Export.copy(text, 'Copied'); });
+      GPN.on(GPN.byId('crClose'), 'click', closeModal);
+    });
+  }
+
+  /* ---------- edit ---------- */
+  function editParentModal(id) {
+    var p = findParent(id);
+    if (!p) { GPN.Toast.error('Not found.'); return; }
+    var current = String(p.LinkedStudentIDs || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    var html =
+      '<h3 class="gpn-modal-title">Edit ' + esc(p.Name) + '</h3>' +
+      '<p class="gpn-modal-sub gpn-mono">' + esc(p.ParentID) + '</p>' +
+      '<div class="gpn-field"><label class="gpn-label">Name</label><input id="epName" class="gpn-input" value="' + esc(p.Name || '') + '"></div>' +
+      '<div class="gpn-grid-2">' +
+        '<div class="gpn-field"><label class="gpn-label">Phone</label><input id="epPhone" class="gpn-input" value="' + esc(p.Phone || '') + '"></div>' +
+        '<div class="gpn-field"><label class="gpn-label">Email</label><input id="epEmail" class="gpn-input" value="' + esc(p.Email || '') + '"></div>' +
+      '</div>' +
+      '<div class="gpn-field"><label class="gpn-label">Status</label><select id="epStatus" class="gpn-select">' +
+        ['ACTIVE', 'INACTIVE'].map(function (x) {
+          return '<option value="' + x + '"' + (String(p.Status).toUpperCase() === x ? ' selected' : '') + '>' + x + '</option>';
+        }).join('') + '</select></div>' +
+      pickerHtml('ep', current) +
+      '<div id="epErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="epCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-cyan" id="epSave">Save</button>' +
+      '</div>';
+    openModal(html, function () {
+      wirePicker('ep');
+      GPN.on(GPN.byId('epCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('epSave'), 'click', function () {
+        var err = GPN.byId('epErr'); err.hidden = true;
+        var patch = {
+          Name: GPN.byId('epName').value.trim(),
+          Phone: GPN.byId('epPhone').value.trim(),
+          Email: GPN.byId('epEmail').value.trim(),
+          Status: GPN.byId('epStatus').value,
+          LinkedStudentIDs: picked('ep')
+        };
+        if (!patch.Name) { err.textContent = 'Name required.'; err.hidden = false; return; }
+        var btn = GPN.byId('epSave');
+        GPN.setLoading(btn, true, 'Saving…');
+        GPN.api('adminUpdateParent', { id: id, patch: patch }).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Saved.');
+          closeModal();
+          load();
+        });
+      });
+    });
+  }
+
+  /* ---------- reset password ---------- */
+  function resetPwModal(id) {
+    var p = findParent(id);
+    if (!p) return;
+    var html =
+      '<h3 class="gpn-modal-title">Reset Password</h3>' +
+      '<p class="gpn-modal-sub">' + esc(p.Name) + ' (' + esc(id) + '). Their sessions will be signed out.</p>' +
+      '<div class="gpn-field"><label class="gpn-label">New Password (min 10)</label><input id="rpNew" class="gpn-input" type="text" autocomplete="off"></div>' +
+      '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="rpPhone" type="button">Use phone number</button>' +
+      '<div id="rpErr" class="gpn-alert gpn-alert-error" hidden></div>' +
+      '<div class="gpn-modal-actions">' +
+        '<button class="gpn-btn gpn-btn-ghost" id="rpCancel">Cancel</button>' +
+        '<button class="gpn-btn gpn-btn-danger" id="rpSave">Reset</button>' +
+      '</div>';
+    openModal(html, function () {
+      GPN.on(GPN.byId('rpPhone'), 'click', function () {
+        GPN.byId('rpNew').value = String(p.Phone || '').replace(/\D/g, '');
+      });
+      GPN.on(GPN.byId('rpCancel'), 'click', closeModal);
+      GPN.on(GPN.byId('rpSave'), 'click', function () {
+        var err = GPN.byId('rpErr');
+        var pw = GPN.byId('rpNew').value;
+        if (pw.length < 10) { err.textContent = 'Min 10 characters.'; err.hidden = false; return; }
+        var btn = GPN.byId('rpSave');
+        GPN.setLoading(btn, true, 'Resetting…');
+        GPN.api('adminResetParentPassword', { id: id, password: pw }).then(function (r) {
+          GPN.setLoading(btn, false);
+          if (!r.ok) { err.textContent = GPN.friendlyError(r); err.hidden = false; return; }
+          GPN.Toast.ok('Password reset.');
+          closeModal();
+        });
+      });
+    });
+  }
+
+  /* ---------- delete ---------- */
+  function deleteParent(id) {
+    if (!confirm('Delete ' + id + '? The account is disabled (soft delete).')) return;
+    GPN.api('adminDeleteParent', { id: id }).then(function (r) {
+      if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+      GPN.Toast.ok('Deleted.');
+      load();
+    });
+  }
+
+})();
+</script>
+</body>
+</html>

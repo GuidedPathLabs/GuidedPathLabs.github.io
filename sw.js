@@ -13,11 +13,11 @@
  *
  * Scope: ./  (root — controls all pages)
  *
- * Version: 1.0.0
+ * Version: 2.0.0
  * ============================================================================
  */
 
-var CACHE_NAME   = 'gpn-static-v1.0.0';
+var CACHE_NAME   = 'gpn-static-v2.0.0';
 var CACHE_PREFIX = 'gpn-';
 
 

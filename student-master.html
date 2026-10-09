@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="assets/icons/favicon.ico">
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
-  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+  <link rel="stylesheet" href="shared/gpn.v2.css?v=2.0.0">
 </head>
 <body>
 
@@ -88,8 +88,8 @@
 <!-- ============================================================
      SCRIPTS
      ============================================================ -->
-<script src="shared/config.js?v=1.0.0"></script>
-<script src="shared/gpn.js?v=1.0.0"></script>
+<script src="shared/config.v2.js?v=2.0.0"></script>
+<script src="shared/gpn.v2.js?v=2.0.0"></script>
 <script>
 (function () {
   'use strict';
@@ -244,17 +244,12 @@
      LOAD OVERVIEW DATA (parallel)
      ========================================================== */
   function loadOverview() {
-    Promise.all([
-      GPN.api('studentMasterDashboard'),
-      GPN.api('studentAnnouncement'),
-      GPN.api('studentCounters'),
-      GPN.api('studentSocials')
-    ]).then(function (res) {
-      DATA.dashboard    = (res[0] && res[0].ok) ? res[0].data : null;
-      DATA.announcement = (res[1] && res[1].ok) ? res[1].data : null;
-      DATA.counters     = (res[2] && res[2].ok) ? res[2].data : null;
-      DATA.socials      = (res[3] && res[3].ok) ? res[3].data : null;
-
+    GPN.api('studentMasterBootstrap').then(function (j) {
+      var d = (j && j.ok) ? (j.data || {}) : {};
+      DATA.dashboard    = d.dashboard    || null;
+      DATA.announcement = d.announcement || null;
+      DATA.counters     = d.counters     || null;
+      DATA.socials      = d.socials      || null;
       if (currentTab === 'overview') renderOverview();
     }).catch(function (err) {
       console.error('Overview load failed:', err);

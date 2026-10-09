@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="assets/icons/favicon.ico">
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
-  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+  <link rel="stylesheet" href="shared/gpn.v2.css?v=2.0.0">
 </head>
 <body>
 
@@ -88,8 +88,8 @@
 <!-- ============================================================
      SCRIPTS
      ============================================================ -->
-<script src="shared/config.js?v=1.0.0"></script>
-<script src="shared/gpn.js?v=1.0.0"></script>
+<script src="shared/config.v2.js?v=2.0.0"></script>
+<script src="shared/gpn.v2.js?v=2.0.0"></script>
 <script>
 (function () {
   'use strict';
@@ -220,25 +220,15 @@
      LOAD ALL DATA
      ========================================================== */
   function loadAll() {
-    Promise.all([
-      GPN.api('studentOfflineDashboard'),
-      GPN.api('studentOfflineFees'),
-      GPN.api('studentOfflineAttendance'),
-      GPN.api('studentOfflineTests'),
-      GPN.api('studentOfflineFiles'),
-      GPN.api('studentAnnouncement'),
-      GPN.api('studentCounters'),
-      GPN.api('studentSocials')
-    ]).then(function (res) {
-      DATA.dashboard   = (res[0] && res[0].ok) ? res[0].data : null;
-      DATA.fees        = (res[1] && res[1].ok) ? res[1].data : null;
-      DATA.attendance  = (res[2] && res[2].ok) ? res[2].data : null;
-      DATA.tests       = (res[3] && res[3].ok) ? res[3].data : null;
-      DATA.files       = (res[4] && res[4].ok) ? res[4].data : null;
-      DATA.announcement= (res[5] && res[5].ok) ? res[5].data : null;
-      DATA.counters    = (res[6] && res[6].ok) ? res[6].data : null;
-      DATA.socials     = (res[7] && res[7].ok) ? res[7].data : null;
-
+    GPN.api('studentOfflineBootstrap').then(function (j) {
+      var d = (j && j.ok) ? (j.data || {}) : {};
+      DATA.dashboard    = d.dashboard    || null;
+      DATA.attendance   = d.attendance   || null;
+      DATA.tests        = d.tests        || null;
+      DATA.files        = d.files        || null;
+      DATA.announcement = d.announcement || null;
+      DATA.counters     = d.counters     || null;
+      DATA.socials      = d.socials      || null;
       renderTab(currentTab);
     }).catch(function (err) {
       console.error('Load failed:', err);
@@ -423,25 +413,25 @@
     /* Attendance */
     html += '<section class="gpn-section">' +
       '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Attendance</h2>' +
-      renderAttendance()
+      renderAttendance() +
     '</section>';
 
     /* Test Scores */
     html += '<section class="gpn-section">' +
       '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Test Scores</h2>' +
-      renderTestScores()
+      renderTestScores() +
     '</section>';
 
     /* Study Files */
     html += '<section class="gpn-section">' +
       '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Study Files</h2>' +
-      renderFiles()
+      renderFiles() +
     '</section>';
 
     /* Progress Report */
     html += '<section class="gpn-section">' +
       '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Progress Report</h2>' +
-      renderProgressReport(d.progressReport)
+      renderProgressReport(d.progressReport) +
     '</section>';
 
     /* Badges */

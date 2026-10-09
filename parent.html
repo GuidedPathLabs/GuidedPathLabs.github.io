@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="assets/icons/favicon.ico">
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
-  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+  <link rel="stylesheet" href="shared/gpn.v2.css?v=2.0.0">
 </head>
 <body>
 
@@ -84,8 +84,8 @@
 <!-- ============================================================
      SCRIPTS
      ============================================================ -->
-<script src="shared/config.js?v=1.0.0"></script>
-<script src="shared/gpn.js?v=1.0.0"></script>
+<script src="shared/config.v2.js?v=2.0.0"></script>
+<script src="shared/gpn.v2.js?v=2.0.0"></script>
 <script>
 (function () {
   'use strict';
@@ -292,6 +292,8 @@
         GPN.api('parentStudentTests',       { studentId: studentId }),
         GPN.api('parentStudentPerformance', { studentId: studentId })
       ];
+    } else if (module === 'mp') {
+      promises = [GPN.api('parentStudentMaster', { studentId: studentId })];
     } else {
       promises = [Promise.resolve({ ok: false, error: 'UNKNOWN_MODULE' })];
     }
@@ -309,6 +311,8 @@
         entry.attendance  = (res[2] && res[2].ok) ? res[2].data : null;
         entry.tests       = (res[3] && res[3].ok) ? res[3].data : null;
         entry.performance = (res[4] && res[4].ok) ? res[4].data : null;
+      } else if (module === 'mp') {
+        entry.master = (res[0] && res[0].ok) ? res[0].data : null;
       }
       DATA.cache[studentId] = entry;
       renderStudent();
@@ -343,6 +347,8 @@
       html += renderOnlineView(cache);
     } else if (module === 'hq') {
       html += renderOfflineView(cache);
+    } else if (module === 'mp') {
+      html += renderMasterView(cache);
     } else {
       html += renderUnknownModule(student);
     }
@@ -632,6 +638,59 @@
 
 
   /* ==========================================================
+     MASTER (mp-) VIEW — combines linked Online + Offline data
+     ========================================================== */
+  function renderMasterView(c) {
+    var m = c.master;
+    if (!m) {
+      return '<div class="gpn-card"><div class="gpn-card-body"><div class="gpn-empty-state">No data available for this student yet.</div></div></div>';
+    }
+    var html = '';
+    var on = m.online, off = m.offline;
+
+    if (on && on.linked) {
+      var today = GPN.todayISO();
+      var nextTest = null;
+      (on.schedule || []).some(function (x) {
+        if (String(x.Type) === 'Test' && GPN.formatDateISO(x.Date) >= today) { nextTest = x; return true; }
+        return false;
+      });
+      var perf = on.performance || {};
+      html += '<h2 class="gpn-page-title" style="font-size:1.1rem;margin:18px 0 12px;">Online Programme</h2>';
+      html += renderOnlineView({
+        dashboard: {
+          student: on.student, access: on.access, walletBalance: on.walletBalance,
+          summary: perf.summary || {}, nextTest: nextTest, remarks: on.remarks || []
+        },
+        results: { results: on.results || [] },
+        wallet: { balance: on.walletBalance, history: on.walletHistory || [] },
+        performance: perf
+      });
+    } else {
+      html += '<div class="gpn-card"><div class="gpn-card-body"><div class="gpn-quiet">Online programme is not linked for this student.</div></div></div>';
+    }
+
+    if (off && off.linked) {
+      var fees = off.fees || {};
+      html += '<h2 class="gpn-page-title" style="font-size:1.1rem;margin:22px 0 12px;">Offline Programme</h2>';
+      html += renderOfflineView({
+        dashboard: {
+          student: off.student, batches: off.batches || [], fees: fees.summary || {},
+          attendance: off.attendance, performance: off.performance || {}, badges: off.badges || [],
+          rank: off.rank, remark: off.remark, progressReport: off.progressReport
+        },
+        fees: { cycles: fees.cycles || [] },
+        attendance: off.attendance,
+        tests: { tests: off.tests || [] }
+      });
+    } else {
+      html += '<div class="gpn-card"><div class="gpn-card-body"><div class="gpn-quiet">Offline programme is not linked for this student.</div></div></div>';
+    }
+    return html;
+  }
+
+
+/* ==========================================================
      SHARED BLOCKS
      ========================================================== */
   function renderPerformanceBlock(p) {

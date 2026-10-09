@@ -17,6 +17,7 @@ Disallow: /admin.html
 Disallow: /admin-online.html
 Disallow: /admin-offline.html
 Disallow: /admin-master.html
+Disallow: /admin-parents.html
 Disallow: /admin-automation.html
 Disallow: /admin-estore.html
 Disallow: /admin-reports.html

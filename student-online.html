@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="assets/icons/favicon.ico">
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
-  <link rel="stylesheet" href="shared/gpn.css?v=1.0.0">
+  <link rel="stylesheet" href="shared/gpn.v2.css?v=2.0.0">
 </head>
 <body>
 
@@ -88,8 +88,8 @@
 <!-- ============================================================
      SCRIPTS
      ============================================================ -->
-<script src="shared/config.js?v=1.0.0"></script>
-<script src="shared/gpn.js?v=1.0.0"></script>
+<script src="shared/config.v2.js?v=2.0.0"></script>
+<script src="shared/gpn.v2.js?v=2.0.0"></script>
 <script>
 (function () {
   'use strict';
@@ -223,23 +223,15 @@
      LOAD ALL DATA
      ========================================================== */
   function loadAll() {
-    Promise.all([
-      GPN.api('studentDashboard'),
-      GPN.api('studentMaterials'),
-      GPN.api('studentTests'),
-      GPN.api('studentPerformance'),
-      GPN.api('studentAnnouncement'),
-      GPN.api('studentCounters'),
-      GPN.api('studentSocials')
-    ]).then(function (res) {
-      DATA.dashboard   = (res[0] && res[0].ok) ? res[0].data : null;
-      DATA.materials   = (res[1] && res[1].ok) ? res[1].data : null;
-      DATA.tests       = (res[2] && res[2].ok) ? res[2].data : null;
-      DATA.performance = (res[3] && res[3].ok) ? res[3].data : null;
-      DATA.announcement= (res[4] && res[4].ok) ? res[4].data : null;
-      DATA.counters    = (res[5] && res[5].ok) ? res[5].data : null;
-      DATA.socials     = (res[6] && res[6].ok) ? res[6].data : null;
-
+    GPN.api('studentBootstrap').then(function (j) {
+      var d = (j && j.ok) ? (j.data || {}) : {};
+      DATA.dashboard    = d.dashboard    || null;
+      DATA.materials    = d.materials    || null;
+      DATA.tests        = d.tests        || null;
+      DATA.performance  = d.performance  || null;
+      DATA.announcement = d.announcement || null;
+      DATA.counters     = d.counters     || null;
+      DATA.socials      = d.socials      || null;
       renderTab(currentTab);
     }).catch(function (err) {
       console.error('Load failed:', err);
@@ -382,25 +374,25 @@
     /* Tests section */
     html += '<section class="gpn-section" id="testsSection">' +
       '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Your Tests</h2>' +
-      renderTests()
+      renderTests() +
     '</section>';
 
     /* Results */
     html += '<section class="gpn-section">' +
       '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Recent Results</h2>' +
-      renderResults(d)
+      renderResults(d) +
     '</section>';
 
     /* Materials */
     html += '<section class="gpn-section">' +
       '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Study Materials</h2>' +
-      renderMaterials()
+      renderMaterials() +
     '</section>';
 
     /* Performance */
     html += '<section class="gpn-section">' +
       '<h2 class="gpn-page-title" style="font-size:1.05rem;margin-bottom:12px;">Performance</h2>' +
-      renderPerformance()
+      renderPerformance() +
     '</section>';
 
     /* Socials */
