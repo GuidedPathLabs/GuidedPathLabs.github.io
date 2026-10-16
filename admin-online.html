@@ -1153,9 +1153,24 @@
         html += '<div class="gpn-row"><button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="tfCopyForm">Copy Form ID</button>' +
                 (t.FormURL ? '<a class="gpn-btn gpn-btn-ghost gpn-btn-sm" href="' + esc(t.FormURL) + '" target="_blank" rel="noopener">Open Form</a>' : '') + '</div>';
       } else {
+        html += '<div class="gpn-quiet" style="margin-bottom:8px;">Paste your questions below. One question per line. A quiz form with Student ID and one-time Submission Code fields is created automatically.</div>';
+        html += '<div class="gpn-field"><label class="gpn-label">Questions</label><textarea id="tfQ" class="gpn-input" style="min-height:240px;font-family:monospace;font-size:13px;" placeholder="MCQ | Capital of India? | Mumbai;Delhi;Kolkata | 1 | 2"></textarea></div>';
+        html += '<div class="gpn-quiet" id="tfQInfo" style="margin-bottom:8px;">0 questions · 0 marks (test is ' + esc(t.TotalMarks) + ' marks)</div>';
+        html += '<details style="margin-bottom:10px;"><summary class="gpn-quiet" style="cursor:pointer;">Format help</summary><pre class="gpn-mono" style="white-space:pre-wrap;font-size:12px;margin-top:8px;">' +
+          'MCQ   | question | opt A;opt B;opt C | correct# | points\n' +
+          'CHECK | question | opt A;opt B;opt C | 0,2 | points\n' +
+          'TF    | question | true or false | points\n' +
+          'ONE   | question | model answer | points   (manual marking)\n' +
+          'SHORT | question | points                  (manual marking)\n' +
+          'LONG  | question | points                  (manual marking)\n\n' +
+          'correct# counts from 0: first option = 0, second = 1.\n' +
+          'Points are optional (default 1). Lines starting with # are ignored.</pre>' +
+          '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" id="tfSample" type="button">Insert sample</button></details>';
+        html += '<div class="gpn-row"><button class="gpn-btn gpn-btn-primary gpn-btn-sm" id="tfCreate">Create Form</button></div>';
+        html += '<details style="margin-top:14px;"><summary class="gpn-quiet" style="cursor:pointer;">Or link an existing form</summary>';
         html += '<div class="gpn-field"><label class="gpn-label">Form URL</label><input id="tfUrl" class="gpn-input" placeholder="https://docs.google.com/forms/d/e/.../viewform"></div>';
         html += '<div class="gpn-field"><label class="gpn-label">Form ID or Edit URL</label><input id="tfId" class="gpn-input"></div>';
-        html += '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" id="tfLink">Link Form</button>';
+        html += '<button class="gpn-btn gpn-btn-cyan gpn-btn-sm" id="tfLink">Link Form</button></details>';
       }
       html += '</div></div>';
 
@@ -1217,6 +1232,54 @@
         GPN.on(GPN.byId('tstClose'), 'click', closeModal);
         var cp = GPN.byId('tfCopyForm');
         if (cp) GPN.on(cp, 'click', function () { GPN.Export.copy(t.FormID, 'Form ID copied'); });
+
+        var tfQ = GPN.byId('tfQ');
+        if (tfQ) {
+          var TYPES_AUTO = { MCQ: 1, CHECK: 1, TF: 1 };
+          function pointsOf(parts, idx) { var n = Number(parts[idx]); return (parts[idx] === undefined || parts[idx] === '' || isNaN(n)) ? 1 : n; }
+          function tally() {
+            var q = 0, auto = 0, man = 0;
+            tfQ.value.split(/\r?\n/).forEach(function (ln) {
+              ln = ln.trim(); if (!ln || ln.charAt(0) === '#') return;
+              var p = ln.split('|').map(function (x) { return x.trim(); });
+              var ty = (p[0] || '').toUpperCase();
+              if (ty === 'MCQ' || ty === 'CHECK') { q++; auto += pointsOf(p, 4); }
+              else if (ty === 'TF') { q++; auto += pointsOf(p, 3); }
+              else if (ty === 'ONE') { q++; man += pointsOf(p, 3); }
+              else if (ty === 'SHORT' || ty === 'LONG') { q++; man += pointsOf(p, 2); }
+            });
+            var el = GPN.byId('tfQInfo');
+            var total = Number(t.TotalMarks || 0);
+            var okm = man > 0 ? auto <= total : auto === total;
+            el.textContent = q + ' questions · ' + auto + ' auto' + (man ? ' + ' + man + ' manual' : '') + ' marks (test is ' + total + ' marks)' + (q && !okm ? ' — marks do not match' : '');
+            el.style.color = (q && !okm) ? '#f87171' : '';
+          }
+          GPN.on(tfQ, 'input', tally);
+          GPN.on(GPN.byId('tfSample'), 'click', function () {
+            tfQ.value = 'MCQ | Capital of India? | Mumbai;Delhi;Kolkata;Chennai | 1 | 1\nCHECK | Select the prime numbers | 2;3;4;5 | 0,1,3 | 2\nTF | The Earth is flat | false | 1\nONE | Value of pi to 2 decimals | 3.14 | 1\nSHORT | Define photosynthesis | 3';
+            tally();
+          });
+          GPN.on(GPN.byId('tfCreate'), 'click', function () {
+            var block = tfQ.value.trim();
+            if (!block) { GPN.Toast.error('Paste your questions first.'); return; }
+            var btn = GPN.byId('tfCreate');
+            GPN.setLoading(btn, true, 'Creating form…');
+            GPN.api('adminCreateTestForm', { testId: tid, questionsBlock: block }).then(function (r) {
+              GPN.setLoading(btn, false);
+              if (!r.ok) {
+                var d = r.data || {};
+                if (r.error === 'ORPHAN_FORM' && d.editUrl) {
+                  alert('Form was created but could not be linked: ' + (r.message || '') + '\n\nEdit URL: ' + d.editUrl + '\nLive URL: ' + d.responderUrl + '\n\nYou can link it manually under "Or link an existing form".');
+                  return;
+                }
+                GPN.Toast.error(GPN.friendlyError(r)); return;
+              }
+              var w = (r.data && r.data.warnings) || [];
+              GPN.Toast.ok('Form created and linked.' + (w.length ? ' ' + w.length + ' line(s) skipped: ' + w.join(' | ') : ''));
+              openTest(tid);
+            });
+          });
+        }
 
         var tfLink = GPN.byId('tfLink');
         if (tfLink) GPN.on(tfLink, 'click', function () {
