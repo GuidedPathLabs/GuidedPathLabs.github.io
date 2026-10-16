@@ -127,6 +127,41 @@
   }
   function closeModal() { GPN.Modal.close('modalGeneric'); }
 
+  /* Generic row actions: delete + activate/deactivate */
+  function rowActions(kind, id, status) {
+    var inactive = String(status || '').toUpperCase() === 'INACTIVE';
+    return '<button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-tog="' + kind + '|' + esc(id) + '|' + (inactive ? 'ACTIVE' : 'INACTIVE') + '">' + (inactive ? 'Activate' : 'Deactivate') + '</button> ' +
+           '<button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-rm="' + kind + '|' + esc(id) + '">Delete</button>';
+  }
+  var KIND = {
+    programme: { del: 'adminDeleteProgramme', upd: 'adminUpdateProgramme', view: 'programmes', label: 'programme' },
+    subject:   { del: 'adminDeleteSubject',   upd: 'adminUpdateSubject',   view: 'subjects',   label: 'subject' },
+    chapter:   { del: 'adminDeleteChapter',   upd: 'adminUpdateChapter',   view: 'chapters',   label: 'chapter' },
+    test:      { del: 'adminDeleteTest',                                    view: 'tests',      label: 'test' }
+  };
+  function bindRowActions() {
+    GPN.$$('button[data-rm]').forEach(function (btn) {
+      GPN.on(btn, 'click', function () {
+        var pr = btn.dataset.rm.split('|'), k = KIND[pr[0]], id = pr[1];
+        if (!confirm('Permanently delete ' + k.label + ' ' + id + '? This cannot be undone.')) return;
+        var payload = pr[0] === 'test' ? { testId: id } : { id: id };
+        GPN.api(k.del, payload).then(function (r) {
+          if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+          GPN.Toast.ok('Deleted.'); invalidateCaches(); render(k.view);
+        });
+      });
+    });
+    GPN.$$('button[data-tog]').forEach(function (btn) {
+      GPN.on(btn, 'click', function () {
+        var pr = btn.dataset.tog.split('|'), k = KIND[pr[0]];
+        GPN.api(k.upd, { id: pr[1], patch: { Status: pr[2] } }).then(function (r) {
+          if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+          GPN.Toast.ok('Set to ' + pr[2] + '.'); invalidateCaches(); render(k.view);
+        });
+      });
+    });
+  }
+
   var cacheProgrammes = null;
   var cacheSubjects = null;
   var cacheChapters = null;
@@ -605,7 +640,7 @@
             '<td data-label="Subjects">' + (p.Subjects || []).length + '</td>' +
             '<td data-label="Total ₹">' + fmtCur(p.TotalPrice || 0) + '</td>' +
             '<td data-label="Status">' + pill(p.Status || '') + '</td>' +
-            '<td data-label="Actions"><button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-prog="' + esc(p.ProgrammeID) + '">Manage</button></td>' +
+            '<td data-label="Actions"><button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-prog="' + esc(p.ProgrammeID) + '">Manage</button> ' + rowActions('programme', p.ProgrammeID, p.Status) + '</td>' +
           '</tr>';
         });
         html += '</tbody></table></div>';
@@ -617,6 +652,7 @@
       GPN.$$('button[data-prog]').forEach(function (btn) {
         GPN.on(btn, 'click', function () { manageProgramme(btn.dataset.prog); });
       });
+      bindRowActions();
     });
   };
 
@@ -718,7 +754,7 @@
       if (!subs.length) {
         html += '<div class="gpn-card-body"><div class="gpn-empty-state">No subjects yet.</div></div>';
       } else {
-        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>ID</th><th>Name</th><th>Class</th><th>Board</th><th>Status</th></tr></thead><tbody>';
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>ID</th><th>Name</th><th>Class</th><th>Board</th><th>Status</th><th></th></tr></thead><tbody>';
         subs.forEach(function (s) {
           html += '<tr>' +
             '<td data-label="ID" class="gpn-mono">' + esc(s.SubjectID) + '</td>' +
@@ -726,12 +762,14 @@
             '<td data-label="Class">' + esc(s.Class || '—') + '</td>' +
             '<td data-label="Board">' + esc(s.Board || '—') + '</td>' +
             '<td data-label="Status">' + pill(s.Status || '') + '</td>' +
+            '<td data-label="Actions">' + rowActions('subject', s.SubjectID, s.Status) + '</td>' +
           '</tr>';
         });
         html += '</tbody></table></div>';
       }
       html += '</div>';
       viewRoot.innerHTML = html;
+      bindRowActions();
 
       GPN.on(GPN.byId('btnAddSubject'), 'click', function () {
         var m =
@@ -773,7 +811,7 @@
       if (!chapters.length) {
         html += '<div class="gpn-card-body"><div class="gpn-empty-state">No chapters yet.</div></div>';
       } else {
-        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>ID</th><th>Subject</th><th>Name</th><th>No.</th><th>Status</th></tr></thead><tbody>';
+        html += '<div class="gpn-table-wrap" style="border:none;border-radius:0;"><table class="gpn-table"><thead><tr><th>ID</th><th>Subject</th><th>Name</th><th>No.</th><th>Status</th><th></th></tr></thead><tbody>';
         chapters.forEach(function (c) {
           html += '<tr>' +
             '<td data-label="ID" class="gpn-mono">' + esc(c.ChapterID) + '</td>' +
@@ -781,12 +819,14 @@
             '<td data-label="Name">' + esc(c.Name) + '</td>' +
             '<td data-label="No.">' + esc(c.Number || '—') + '</td>' +
             '<td data-label="Status">' + pill(c.Status || '') + '</td>' +
+            '<td data-label="Actions">' + rowActions('chapter', c.ChapterID, c.Status) + '</td>' +
           '</tr>';
         });
         html += '</tbody></table></div>';
       }
       html += '</div>';
       viewRoot.innerHTML = html;
+      bindRowActions();
 
       GPN.on(GPN.byId('btnAddChapter'), 'click', function () {
         var opts = '<option value="">— Select Subject —</option>' + subjects.map(function (s) { return '<option value="' + esc(s.SubjectID) + '">' + esc(s.Name) + '</option>'; }).join('');
@@ -1081,7 +1121,7 @@
             '<td data-label="Price">' + fmtCur(t.Price || 0) + '</td>' +
             '<td data-label="Status">' + pill(t.Status || '') + '</td>' +
             '<td data-label="Form">' + (t.FormID ? pill('Linked', 'published') : pill('None', 'draft')) + '</td>' +
-            '<td data-label="Actions"><button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-test="' + esc(t.TestID) + '">Open</button></td>' +
+            '<td data-label="Actions"><button class="gpn-btn gpn-btn-ghost gpn-btn-sm" data-test="' + esc(t.TestID) + '">Open</button>' + (String(t.Status).toUpperCase() === 'DRAFT' ? ' <button class="gpn-btn gpn-btn-danger gpn-btn-sm" data-rm="test|' + esc(t.TestID) + '">Delete</button>' : '') + '</td>' +
           '</tr>';
         });
         html += '</tbody></table></div>';
@@ -1093,6 +1133,7 @@
       GPN.$$('button[data-test]').forEach(function (btn) {
         GPN.on(btn, 'click', function () { openTest(btn.dataset.test); });
       });
+      bindRowActions();
     });
   };
 
