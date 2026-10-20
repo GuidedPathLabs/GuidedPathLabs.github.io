@@ -143,11 +143,20 @@
     GPN.$$('button[data-rm]').forEach(function (btn) {
       GPN.on(btn, 'click', function () {
         var pr = btn.dataset.rm.split('|'), k = KIND[pr[0]], id = pr[1];
-        if (!confirm('Permanently delete ' + k.label + ' ' + id + '? This cannot be undone.')) return;
         var payload = pr[0] === 'test' ? { testId: id } : { id: id };
-        GPN.api(k.del, payload).then(function (r) {
-          if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
-          GPN.Toast.ok('Deleted.'); invalidateCaches(); render(k.view);
+        GPN.api(k.del, payload).then(function (pv) {
+          if (!pv.ok) { GPN.Toast.error(GPN.friendlyError(pv)); return; }
+          var also = (pv.data && pv.data.also) || {};
+          var lines = Object.keys(also).map(function (n) { return '  • ' + also[n] + ' ' + n; });
+          var msg = 'PERMANENTLY delete ' + k.label + ' ' + id + '?' +
+            (lines.length ? '\n\nThis will also remove:\n' + lines.join('\n') : '\n\nNothing else is linked to it.') +
+            '\n\nThis cannot be undone.';
+          if (!confirm(msg)) return;
+          payload.confirm = true;
+          GPN.api(k.del, payload).then(function (r) {
+            if (!r.ok) { GPN.Toast.error(GPN.friendlyError(r)); return; }
+            GPN.Toast.ok('Deleted.'); invalidateCaches(); render(k.view);
+          });
         });
       });
     });
