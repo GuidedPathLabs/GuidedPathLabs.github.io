@@ -124,6 +124,7 @@
   function api(action, payload, options) {
     options = options || {};
 
+    var __t0 = Date.now();
     var body = Object.assign({ action: action }, payload || {});
     var token = Session.getToken();
     if (token && !options.skipToken) body.token = token;
@@ -136,6 +137,7 @@
     })
     .then(function (res) { return res.json(); })
     .then(function (json) {
+      try { console.info('[GPN] ' + action + ' total ' + (Date.now() - __t0) + 'ms, server ' + (json && json.ms != null ? json.ms : '?') + 'ms'); } catch (e) {}
       if (json && json.ok === false && isAuthError(json.error)) {
         if (typeof __authFailHandler === 'function') {
           __authFailHandler(json);
