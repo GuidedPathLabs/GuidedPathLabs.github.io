@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPN Admin Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --primary: #0A192F;
+            --accent: #00E5FF;
+            --gold: #FFD54F;
+            --text-dark: #333;
+            --text-light: #fff;
+            --danger: #ff4d4d;
+            --success: #4CAF50;
+            --card-bg: #fff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-dark);
+            margin: 0;
+            padding: 0;
+        }
+
+        /* --- LOGIN SCREEN --- */
+        #login-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: var(--primary);
+        }
+        .login-box {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+        .login-box h2 { color: var(--primary); margin-bottom: 1.5rem; }
+        .input-group { margin-bottom: 1rem; text-align: left; }
+        .input-group label { display: block; font-weight: bold; margin-bottom: 0.5rem; }
+        .input-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn {
+            background: var(--primary);
+            color: var(--text-light);
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            width: 100%;
+            transition: background 0.3s;
+        }
+        .btn:hover { background: #112240; }
+        .btn-cyan { background: var(--accent); color: var(--primary); font-weight: bold; }
+        .btn-cyan:hover { background: #00b3cc; }
+
+        /* --- DASHBOARD --- */
+        #dashboard-screen {
+            display: none;
+        }
+        header {
+            background: var(--primary);
+            color: var(--text-light);
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header h1 { margin: 0; font-size: 1.5rem; color: var(--gold); }
+        .header-controls button { margin-left: 10px; }
+
+        .container {
+            padding: 1rem;
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        /* Tabs */
+        .tabs { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 1rem; }
+        .tab {
+            padding: 10px 20px; cursor: pointer; background: #eee; border: none; font-weight: bold;
+            border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 5px;
+        }
+        .tab.active { background: var(--primary); color: var(--gold); }
+
+        /* Stats Card */
+        .stat-card {
+            background: var(--primary);
+            color: var(--text-light);
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .stat-card h3 { margin: 0 0 10px 0; color: var(--accent); }
+        .stat-card .amount { font-size: 2.5rem; font-weight: bold; color: var(--gold); }
+
+        /* Dues List */
+        .student-card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 5px solid var(--accent);
+        }
+        .student-info h4 { margin: 0 0 5px 0; font-size: 1.2rem; color: var(--primary); }
+        .student-info p { margin: 2px 0; font-size: 0.9rem; color: #555; }
+        .badge { padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
+        .badge-late { background: var(--danger); color: white; }
+        .badge-due { background: var(--gold); color: var(--text-dark); }
+        
+        .action-area { text-align: right; }
+        .action-area .fee { font-size: 1.3rem; font-weight: bold; color: var(--primary); display: block; margin-bottom: 10px; }
+
+        /* Logs Section */
+        .filters {
+            display: flex; gap: 10px; margin-bottom: 15px;
+        }
+        .filters select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        
+        table { width: 100%; border-collapse: collapse; background: var(--card-bg); box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: var(--primary); color: white; }
+        tr:hover { background: #f9f9f9; }
+
+        /* Loading */
+        #loading { display: none; text-align: center; padding: 2rem; color: var(--primary); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen">
+        <div class="login-box">
+            <h2>GPN Fees Admin</h2>
+            <div class="input-group">
+                <label>Teacher ID</label>
+                <input type="text" id="userId" placeholder="T001">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="••••••••">
+            </div>
+            <button class="btn" onclick="login()">Login</button>
+            <p id="login-error" style="color: var(--danger); margin-top: 10px; display: none;"></p>
+        </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboard-screen">
+        <header>
+            <h1>GPN Central</h1>
+            <div class="header-controls">
+                <span id="welcome-msg" style="margin-right: 15px;"></span>
+                <button class="btn btn-cyan" onclick="generateLedger()" style="padding: 5px 10px;">⚡ Generate Ledger</button>
+                <button class="btn" onclick="logout()" style="background: var(--danger); padding: 5px 10px;">Logout</button>
+            </div>
+        </header>
+
+        <div class="container">
+            <!-- Global Stats -->
+            <div class="stat-card">
+                <h3>Fees Collected This Month</h3>
+                <div class="amount" id="monthly-total">₹ 0</div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('dues-tab', this)">Active Dues</button>
+                <button class="tab" onclick="switchTab('logs-tab', this)">Message Logs</button>
+            </div>
+
+            <div id="loading">Loading data... Please wait.</div>
+
+            <!-- Dues Tab -->
+            <div id="dues-tab" class="tab-content">
+                <div id="dues-container"></div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div id="logs-tab" class="tab-content" style="display: none;">
+                <div class="filters">
+                    <select id="filter-status" onchange="applyLogFilters()">
+                        <option value="All">All Status</option>
+                        <option value="Delivered">Delivered</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Failed">Failed</option>
+                    </select>
+                    <select id="filter-month" onchange="applyLogFilters()">
+                        <option value="All">All Months</option>
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Student</th>
+                                <th>Cycle Start</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURATION
+        // ==========================================
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx9YoiIwRok4D-YaNNkg1LHyuc5ZngbwKAv7TLNsbKZr1Jk_ntf5lhpBiG3bW-ibkJ_fQ/exec';
+        
+        let sessionToken = localStorage.getItem('gpn_token');
+        let rawLogsData = [];
+
+        // Check login on load
+        if (sessionToken) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('dashboard-screen').style.display = 'block';
+            document.getElementById('welcome-msg').innerText = "Welcome back";
+            loadDashboard();
+        }
+
+        // ==========================================
+        // API HELPER
+        // ==========================================
+        async function apiCall(action, payload = {}) {
+            payload.action = action;
+            if (sessionToken) payload.token = sessionToken;
+            
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Bypass CORS
+                    body: JSON.stringify(payload)
+                });
+                return await response.json();
+            } catch (err) {
+                alert("Network error: " + err);
+                return { success: false };
+            }
+        }
+
+        // ==========================================
+        // AUTHENTICATION
+        // ==========================================
+        async function login() {
+            const btn = document.querySelector('#login-screen .btn');
+            btn.innerText = "Authenticating...";
+            const res = await apiCall('login', {
+                userId: document.getElementById('userId').value.trim(),
+                password: document.getElementById('password').value
+            });
+
+            if (res.success) {
+                sessionToken = res.token;
+                localStorage.setItem('gpn_token', sessionToken);
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('dashboard-screen').style.display = 'block';
+                document.getElementById('welcome-msg').innerText = "Hi, " + res.name;
+                loadDashboard();
+            } else {
+                document.getElementById('login-error').innerText = res.message;
+                document.getElementById('login-error').style.display = 'block';
+            }
+            btn.innerText = "Login";
+        }
+
+        function logout() {
+            localStorage.removeItem('gpn_token');
+            sessionToken = null;
+            document.getElementById('dashboard-screen').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'flex';
+        }
+
+        // ==========================================
+        // UI & NAVIGATION
+        // ==========================================
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).style.display = 'block';
+            btn.classList.add('active');
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        // ==========================================
+        // DATA LOADING
+        // ==========================================
+        async function loadDashboard() {
+            showLoading(true);
+            document.getElementById('dues-container').innerHTML = '';
+            
+            // 1. Fetch Stats
+            const stats = await apiCall('fetchStats');
+            if (stats.success) {
+                document.getElementById('monthly-total').innerText = '₹ ' + stats.currentMonthTotal.toLocaleString('en-IN');
+            }
+
+            // 2. Fetch Dues
+            const data = await apiCall('fetchData');
+            if (data.success) {
+                renderDues(data.data);
+            } else if (data.error === "Unauthorized") {
+                logout(); return;
+            }
+
+            // 3. Fetch Logs
+            const logs = await apiCall('fetchLogs');
+            if (logs.success) {
+                rawLogsData = logs.data;
+                populateMonthFilter();
+                applyLogFilters();
+            }
+
+            showLoading(false);
+        }
+
+        function renderDues(dues) {
+            const container = document.getElementById('dues-container');
+            if (dues.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#555;">No pending dues!</p>';
+                return;
+            }
+
+            let html = '';
+            dues.forEach(d => {
+                let badge = d.status === 'Late' 
+                    ? `<span class="badge badge-late">${d.daysLate} Days Late</span>`
+                    : `<span class="badge badge-due">Due</span>`;
+
+                html += `
+                <div class="student-card" id="card-${d.cycleId}">
+                    <div class="student-info">
+                        <h4>${d.studentName} ${badge}</h4>
+                        <p><strong>Cycle:</strong> ${d.cycleStart} to +29 Days</p>
+                        <p><strong>Class:</strong> ${d.studentClass} | <strong>Parent:</strong> ${d.parentName}</p>
+                    </div>
+                    <div class="action-area">
+                        <span class="fee">₹${d.amount.toLocaleString('en-IN')}</span>
+                        <button class="btn btn-cyan" onclick="markPaid('${d.cycleId}', ${d.amount}, this)">Mark Paid</button>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // ==========================================
+        // ACTIONS
+        // ==========================================
+        async function markPaid(cycleId, amount, btnElement) {
+            if (!confirm(`Confirm payment of ₹${amount}?`)) return;
+            
+            btnElement.innerText = "Processing...";
+            btnElement.disabled = true;
+
+            const res = await apiCall('markPaid', { cycleId: cycleId, amount: amount });
+            
+            if (res.success) {
+                document.getElementById(`card-${cycleId}`).style.display = 'none';
+                // Soft refresh stats without full reload
+                const stats = await apiCall('fetchStats');
+                if (stats.success) document.getElementById('monthly-total').innerText = '₹ ' + stats.currentMonthTotal.toLocaleString('en-IN');
+            } else {
+                alert("Error: " + res.message);
+                btnElement.innerText = "Mark Paid";
+                btnElement.disabled = false;
+            }
+        }
+
+        async function generateLedger() {
+            if (!confirm("Generate Master Ledger? This will pre-build 12 months of cycles for all active students.")) return;
+            
+            showLoading(true);
+            const res = await apiCall('generateLedger');
+            showLoading(false);
+            
+            if (res.success) {
+                alert(res.message);
+                loadDashboard(); // Refresh view
+            } else {
+                alert("Error: " + (res.message || res.error));
+            }
+        }
+
+        // ==========================================
+        // LOGS & FILTERING
+        // ==========================================
+        function populateMonthFilter() {
+            const select = document.getElementById('filter-month');
+            select.innerHTML = '<option value="All">All Months</option>';
+            
+            let months = new Set();
+            rawLogsData.forEach(log => {
+                if (log.timestamp) {
+                    months.add(log.timestamp.substring(0, 7)); 
+                }
+            });
+
+            let sortedMonths = Array.from(months).sort().reverse();
+            
+            sortedMonths.forEach(m => {
+                let opt = document.createElement('option');
+                opt.value = m;
+                opt.innerText = m;
+                select.appendChild(opt);
+            });
+        }
+
+        function applyLogFilters() {
+            const statusFilter = document.getElementById('filter-status').value;
+            const monthFilter = document.getElementById('filter-month').value;
+            
+            const tbody = document.getElementById('logs-tbody');
+            tbody.innerHTML = '';
+
+            let filtered = rawLogsData.filter(log => {
+                let matchStatus = (statusFilter === 'All') || (log.status === statusFilter);
+                let matchMonth = true;
+                if (monthFilter !== 'All' && log.timestamp) {
+                    matchMonth = log.timestamp.startsWith(monthFilter);
+                }
+                return matchStatus && matchMonth;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No logs found.</td></tr>';
+                return;
+            }
+
+            filtered.forEach(log => {
+                let statusColor = log.status === 'Delivered' ? 'var(--success)' : (log.status === 'Failed' ? 'var(--danger)' : '#ffa500');
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${log.timestamp || '-'}</td>
+                        <td><strong>${log.studentName}</strong></td>
+                        <td>${log.billingCycle}</td>
+                        <td>${log.messageType}</td>
+                        <td style="color:${statusColor}; font-weight:bold;">${log.status}</td>
+                    </tr>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
