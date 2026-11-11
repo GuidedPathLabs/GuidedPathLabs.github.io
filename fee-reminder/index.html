@@ -129,7 +129,7 @@
       if (data.success) {
         sessionStorage.setItem('gpn_token', data.token);
         sessionStorage.setItem('gpn_teacher_name', data.teacherName);
-        window.location.href = 'Admin.html';
+        window.location.href = 'admin.html';
       } else {
         errorEl.textContent = data.error || 'Login failed.';
       }
